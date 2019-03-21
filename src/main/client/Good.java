@@ -1,4 +1,4 @@
-package main;
+package main.client;
 
 public class Good {
 	private String userId;

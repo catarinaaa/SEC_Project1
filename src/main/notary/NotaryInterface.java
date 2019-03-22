@@ -10,7 +10,7 @@ public interface NotaryInterface extends Remote {
 	
 	State stateOfGood(String goodId) throws RemoteException;
 	
-	boolean transferGood(String buyerId, String goodId) throws RemoteException;
+	boolean transferGood(String sellerId, String buyerId, String goodId) throws RemoteException;
 	
 	String sayHello() throws RemoteException;
 }

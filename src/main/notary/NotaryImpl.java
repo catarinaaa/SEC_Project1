@@ -47,8 +47,16 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public boolean transferGood(String buyerId, String goodId) throws RemoteException {
-		// TODO Auto-generated method stub
+	public boolean transferGood(String sellerId, String buyerId, String goodId) throws RemoteException {
+		Good good;
+		if((good = goodsList.get(goodId)) != null) {
+			if(good.getUserId().equals(sellerId) && goodsToSell.contains(goodId)) {
+				good.setUserId(buyerId);
+				goodsList.put(goodId, good);
+				goodsToSell.remove(goodId);
+				return true;
+			}
+		}
 		return false;
 	}
 

@@ -26,6 +26,10 @@ public class Client {
 			System.out.println(notary.stateOfGood("good1").getUserId() + " " + notary.stateOfGood("good1").getState());
 			System.out.println(notary.stateOfGood("good4").getUserId() + " " + notary.stateOfGood("good4").getState());
 			
+			System.out.println(notary.transferGood("user1", "user2", "good1"));
+			System.out.println(notary.stateOfGood("good1").getUserId() + " " + notary.stateOfGood("good1").getState());
+			
+			
 		} catch (MalformedURLException | RemoteException | NotBoundException e) {
 			System.out.println("Error locating Notary");
 			e.printStackTrace();

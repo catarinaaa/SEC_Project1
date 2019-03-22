@@ -20,6 +20,11 @@ public class Client {
 			notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
 			
 			System.out.println(notary.sayHello());
+			System.out.println(notary.intentionToSell("user1", "good1"));
+			System.out.println(notary.intentionToSell("user2", "good1"));
+			System.out.println(notary.intentionToSell("user1", "good1"));
+			System.out.println(notary.stateOfGood("good1").getUserId() + " " + notary.stateOfGood("good1").getState());
+			System.out.println(notary.stateOfGood("good4").getUserId() + " " + notary.stateOfGood("good4").getState());
 			
 		} catch (MalformedURLException | RemoteException | NotBoundException e) {
 			System.out.println("Error locating Notary");

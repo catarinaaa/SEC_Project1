@@ -1,4 +1,4 @@
-package main.client;
+package main.notary;
 
 public class Good {
 	private String userId;

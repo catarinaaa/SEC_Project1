@@ -2,18 +2,22 @@ package main.notary;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.util.ArrayList;
+import java.util.TreeMap;
 
 public class NotaryServer {
-
+	
+	
+	
 	public static void main(String[] args) {
 		int port = 3000;
 		System.out.println("Main OK");
 
 		SecurityManager sm = System.getSecurityManager();
-
+		
 		try {
 			NotaryImpl obj = new NotaryImpl();
-
+			
 			Registry reg = LocateRegistry.createRegistry(port);
 			reg.rebind("Notary", obj);
 
@@ -31,5 +35,7 @@ public class NotaryServer {
 		}
 
 	}
+	
+	
 
 }

@@ -20,14 +20,17 @@ public class Client {
 			notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
 			
 			System.out.println(notary.sayHello());
-			System.out.println(notary.intentionToSell("user1", "good1"));
-			System.out.println(notary.intentionToSell("user2", "good1"));
-			System.out.println(notary.intentionToSell("user1", "good1"));
-			System.out.println(notary.stateOfGood("good1").getUserId() + " " + notary.stateOfGood("good1").getState());
-			System.out.println(notary.stateOfGood("good4").getUserId() + " " + notary.stateOfGood("good4").getState());
+//			System.out.println(notary.intentionToSell("user1", "good1"));
+//			System.out.println(notary.intentionToSell("user2", "good4"));
+//			System.out.println(notary.intentionToSell("user1", "good1"));
+//			System.out.println(notary.stateOfGood("good1").getUserId() + " " + notary.stateOfGood("good1").getState());
+//			System.out.println(notary.stateOfGood("good4").getUserId() + " " + notary.stateOfGood("good4").getState());
+//			
+//			System.out.println(notary.transferGood("user2", "user1", "good4"));
+//			System.out.println(notary.stateOfGood("good1").getUserId() + " " + notary.stateOfGood("good1").getState());
 			
-			System.out.println(notary.transferGood("user1", "user2", "good1"));
-			System.out.println(notary.stateOfGood("good1").getUserId() + " " + notary.stateOfGood("good1").getState());
+			System.out.println(notary.intentionToSell("user1", "good1"));
+			System.out.println(notary.transferGood("user1", "user3", "good1"));
 			
 			
 		} catch (MalformedURLException | RemoteException | NotBoundException e) {

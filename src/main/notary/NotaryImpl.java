@@ -1,12 +1,24 @@
 package main.notary;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.Serializable;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.TreeMap;
 
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
+	
+	private static NotaryImpl instance = null;
 	
 	private int counter = 1;
 	
@@ -14,9 +26,45 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	
 	private ArrayList<String> goodsToSell = new ArrayList<String>();
 	
+	private String path = "database.txt";
+	private File file = null;
+	private BufferedReader input = null;
+	private BufferedWriter output = null;
+	
 	protected NotaryImpl() throws RemoteException {
 		super();
 		populateList();
+		
+		
+		try {
+			file = new File(path);
+			if(!file.exists()) {
+				file.createNewFile();
+				System.out.println("Creating new file");
+			}
+			input = new BufferedReader(new FileReader(file));
+			output = new BufferedWriter(new FileWriter(file, true));
+			recoverTransactions();
+			printGoods();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+
+	private void recoverTransactions() throws IOException {
+		System.out.println("Recovering transactions");
+		String line;
+		String[] splitLine;
+		Good good;
+		while((line = input.readLine()) != null) {
+			splitLine = line.split(";");
+			System.out.println("Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
+			good = goodsList.get(splitLine[2]);
+			good.setUserId(splitLine[1]);
+			goodsList.put(splitLine[2], good);
+		}
+		
 	}
 
 	/**
@@ -54,10 +102,21 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				good.setUserId(buyerId);
 				goodsList.put(goodId, good);
 				goodsToSell.remove(goodId);
+				saveTransfer(sellerId,buyerId,goodId);
 				return true;
 			}
 		}
 		return false;
+	}
+
+	private void saveTransfer(String sellerId, String buyerId, String goodId) {
+		try {
+			output.write(sellerId+";"+buyerId+";"+goodId+"\n");
+			output.flush();
+		} catch (IOException e) {
+			System.out.println("Error writing to file");
+			e.printStackTrace();
+		}		
 	}
 
 	@Override
@@ -76,6 +135,34 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		goodsList.put("good6", new Good("user3", "good6"));
 		
 	}
-		
+	
+	public static NotaryImpl getInstance() {
+		if(instance == null) {
+			try {
+				instance = new NotaryImpl();
+			} catch (RemoteException e) {
+				e.printStackTrace();
+				System.exit(1);
+			}
+		}
+		return instance;
+	}
+	
+	public void printGoods() {
+		for (String id : goodsList.keySet()) {
+			System.out.println(goodsList.get(id).getUserId() + " - " + id);
+		}
+	}
+	
+//	public void stop() {
+//		try {
+//			input.close();
+//			output.close();
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//		
+//	}
 	
 }

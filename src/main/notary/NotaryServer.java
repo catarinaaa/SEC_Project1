@@ -13,10 +13,8 @@ public class NotaryServer {
 		int port = 3000;
 		System.out.println("Main OK");
 
-		SecurityManager sm = System.getSecurityManager();
-		
 		try {
-			NotaryImpl obj = new NotaryImpl();
+			NotaryImpl obj = NotaryImpl.getInstance();
 			
 			Registry reg = LocateRegistry.createRegistry(port);
 			reg.rebind("Notary", obj);

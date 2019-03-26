@@ -4,7 +4,7 @@ import java.util.ArrayList;
 
 import main.notary.Good;
 
-public class User {
+public class User implements UserInterface {
 	private final String id;
 	private ArrayList<Good> goods;
 	
@@ -22,5 +22,6 @@ public class User {
 	public ArrayList<Good> getGoods() {
 		return goods;
 	}
-		
+
+	
 }

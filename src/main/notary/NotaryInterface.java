@@ -6,7 +6,9 @@ import java.util.Set;
 
 public interface NotaryInterface extends Remote {
 
-	boolean intentionToSell(String userId, String goodId) throws RemoteException;
+	String getNounce(String userId) throws RemoteException;
+	
+	boolean intentionToSell(String userId, String goodId, String cnounce,byte[] hashBytes) throws RemoteException;
 	
 	State stateOfGood(String goodId) throws RemoteException;
 	

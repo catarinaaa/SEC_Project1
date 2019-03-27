@@ -10,21 +10,36 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
+import java.math.BigInteger;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.security.KeyFactory;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Random;
 import java.util.TreeMap;
+
+import javax.crypto.Mac;
 
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
 	
 	private static NotaryImpl instance = null;
+	
+	private Random random = new Random();
 	
 	private int counter = 1;
 	
 	private TreeMap<String, Good> goodsList = new TreeMap<>();
 	
 	private ArrayList<String> goodsToSell = new ArrayList<String>();
+	
+	private TreeMap<String, String> nounceList = new TreeMap<>();
 	
 	private String path = "database.txt";
 	private File file = null;
@@ -73,7 +88,61 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private static final long serialVersionUID = 1L;
 
 	@Override
-	public boolean intentionToSell(String userId, String goodId) throws RemoteException {
+	public boolean intentionToSell(String userId, String goodId, String cnounce, byte[] hashBytes) throws RemoteException {
+		
+//		PublicKey publicKey = null ;
+//		try {
+//		FileInputStream keyfis = new FileInputStream("suepk");
+//		byte[] encKey = new byte[keyfis.available()];  
+//		keyfis.read(encKey);
+//		
+//		keyfis.close();
+//		
+//		X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(encKey);
+//		KeyFactory keyFactory = KeyFactory.getInstance("DSA", "SUN");
+//		publicKey = keyFactory.generatePublic(pubKeySpec);
+//		
+//		
+//		Mac mac = Mac.getInstance("HmacSHA256");
+//		byte[] data = new String(userId+"-"+goodId).getBytes();
+//		mac.init(publicKey);
+//		mac.update(data);
+//		byte[] macBytesLocal = mac.doFinal();
+//		
+//		if(Arrays.equals(macBytesLocal, macBytes)) {
+//			System.out.println("Nice!");
+//		}
+//		else {
+//			System.out.println("OH NO NONO");
+//		}
+//		
+//		
+//		
+//		} catch(Exception e) {
+//			return false;
+//		}
+		
+		try {
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			String toHash = nounceList.get(userId)+cnounce+userId+goodId;
+			byte[] hashed = digest.digest(toHash.getBytes("UTF-8"));
+			System.out.println("> " + toHash);
+			System.out.println("> " + digest.getAlgorithm() + " " + bytesToHex(hashed));
+			if(Arrays.equals(hashed, hashBytes)) {
+				System.out.println("Hashs are the same");
+			}
+			else {
+				System.out.println("ERROR!");
+				return false;
+			}
+			
+			
+		} catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
 		Good good;
 		
 		if((good = goodsList.get(goodId)) != null) {
@@ -153,6 +222,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			System.out.println(goodsList.get(id).getUserId() + " - " + id);
 		}
 	}
+
+	@Override
+	public String getNounce(String userId) throws RemoteException {
+		BigInteger nounce = new BigInteger(256, random);
+		nounceList.put(userId, nounce.toString());
+		return nounce.toString();
+	}
 	
 //	public void stop() {
 //		try {
@@ -164,5 +240,15 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 //		}
 //		
 //	}
+	
+	private static String bytesToHex(byte[] hash) {
+	    StringBuffer hexString = new StringBuffer();
+	    for (int i = 0; i < hash.length; i++) {
+	    String hex = Integer.toHexString(0xff & hash[i]);
+	    if(hex.length() == 1) hexString.append('0');
+	        hexString.append(hex);
+	    }
+	    return hexString.toString();
+	}
 	
 }

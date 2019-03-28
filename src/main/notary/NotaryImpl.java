@@ -165,7 +165,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public boolean transferGood(String sellerId, String buyerId, String goodId) throws RemoteException {
+	public boolean transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] hashBytes, byte[] signature) throws RemoteException {
+		
+		String toHash = nounceList.get(sellerId)+cnounce+sellerId+buyerId+goodId;
+		if(!verifySignatureAndHash(toHash, hashBytes, signature, "pubKey-"+sellerId+".txt"))
+			return false;
+		
+		
 		Good good;
 		if((good = goodsList.get(goodId)) != null) {
 			if(good.getUserId().equals(sellerId) && goodsToSell.contains(goodId)) {
@@ -173,9 +179,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				goodsList.put(goodId, good);
 				goodsToSell.remove(goodId);
 				saveTransfer(sellerId,buyerId,goodId);
+				printGoods();
 				return true;
 			}
 		}
+		printGoods();
 		return false;
 	}
 
@@ -280,10 +288,28 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				System.out.println("ERROR!");
 				return false;
 			}
-		} catch(Exception e) {
+		} catch(NoSuchAlgorithmException e) {
 			e.printStackTrace();
-			return false;
+		} catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (SignatureException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidKeyException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidKeySpecException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
+		return false;
 	}
 	
 }

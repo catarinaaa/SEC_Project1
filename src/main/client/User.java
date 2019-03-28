@@ -74,12 +74,7 @@ public class User implements UserInterface {
 			//output.write(id + " " + publicKey);
 			output.write(publicKey.getEncoded());
 			output.flush();
-			output.close();
-			
-			FileOutputStream keyfos = new FileOutputStream("suepk");
-			keyfos.write(publicKey.getEncoded());
-			keyfos.close();
-			
+			output.close();	
 			
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -110,7 +105,12 @@ public class User implements UserInterface {
 	@Override
 	public Boolean buyGood(String userId, String goodId) throws RemoteException {
 		
-		return notary.transferGood(this.getId(), userId, goodId);
+		String cnounce = generateCNounce();
+		String data = notary.getNounce(this.id)+cnounce+this.id+userId+goodId;
+		byte[] hashedData = hashMessage(data);
+		byte[] signedHashedData = signByteArray(hashedData);
+		
+		return notary.transferGood(this.getId(), userId, goodId, cnounce, hashedData, signedHashedData);
 	}
 	
 	public void test() throws Exception {
@@ -129,21 +129,17 @@ public class User implements UserInterface {
 	
 	public boolean sell() {
 		try {
-			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			
 			String nounce = notary.getNounce(this.id);
 			String cnounce = generateCNounce();
 			String str = nounce + cnounce + this.id + "good2";
 			System.out.println(str);
-			byte[] dataDigested = digest.digest(str.getBytes("UTF-8"));
+			byte[] dataDigested = hashMessage(str);
+			byte[] hashSigned = signByteArray(dataDigested);
 			
-			Signature dsaForSign = Signature.getInstance("SHA1withDSA");
-			dsaForSign.initSign(privateKey);
-			dsaForSign.update(dataDigested);
-			byte[] hashSigned = dsaForSign.sign();
+			System.out.println("Intention > " +notary.intentionToSell(this.id, "good2", cnounce, dataDigested, hashSigned));
 			
-			System.out.println(notary.intentionToSell(this.id, "good2", cnounce, dataDigested, hashSigned));
-			
-		} catch (NoSuchAlgorithmException | RemoteException | UnsupportedEncodingException | InvalidKeyException | SignatureException e) {
+		} catch (RemoteException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
@@ -162,6 +158,34 @@ public class User implements UserInterface {
 	        hexString.append(hex);
 	    }
 	    return hexString.toString();
+	}
+	
+	private byte[] hashMessage(String msg) {
+		MessageDigest digest;
+		try {
+			digest = MessageDigest.getInstance("SHA-256");
+			return digest.digest(msg.getBytes("UTF-8"));
+		} catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return null;
+		}
+		
+	}
+	
+	private byte[] signByteArray(byte[] array) {
+		Signature dsaForSign;
+		try {
+			dsaForSign = Signature.getInstance("SHA1withDSA");
+			dsaForSign.initSign(privateKey);
+			dsaForSign.update(array);
+			return dsaForSign.sign();
+		} catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return null;
+		}
+		
 	}
 	
 }

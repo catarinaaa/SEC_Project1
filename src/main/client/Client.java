@@ -31,9 +31,10 @@ public class Client {
 			//System.out.println(notary.intentionToSell("user1", "good1"));
 			//System.out.println(notary.transferGood("user1", "user3", "good1"));
 			
-			User u = new User("1");
+			User u = new User("user1");
 			
 			u.sell();
+			System.out.println("Transfer>" + u.buyGood("user2", "good2"));
 			
 			
 		} catch (MalformedURLException | RemoteException | NotBoundException e) {

@@ -8,7 +8,7 @@ public interface NotaryInterface extends Remote {
 
 	String getNounce(String userId) throws RemoteException;
 	
-	boolean intentionToSell(String userId, String goodId, String cnounce,byte[] hashBytes) throws RemoteException;
+	boolean intentionToSell(String userId, String goodId, String cnounce, byte[] hashBytes, byte[] signature) throws RemoteException;
 	
 	State stateOfGood(String goodId) throws RemoteException;
 	

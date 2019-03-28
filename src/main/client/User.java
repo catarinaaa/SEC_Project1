@@ -47,6 +47,7 @@ public class User implements UserInterface {
 	public User(String id) throws NoSuchAlgorithmException {
 		super();
 		this.id = id;
+		this.path = "pubKey-"+id+".txt";
 		
 		System.out.println("Initializing Client");
 		
@@ -67,8 +68,11 @@ public class User implements UserInterface {
 				file.createNewFile();
 				System.out.println("Creating new file");
 			}
-			BufferedWriter output = new BufferedWriter(new FileWriter(file, true));
-			output.write(id + " " + publicKey);
+			// changed true -> false
+			//BufferedWriter output = new BufferedWriter(new FileWriter(file, false));
+			FileOutputStream output = new FileOutputStream(path);
+			//output.write(id + " " + publicKey);
+			output.write(publicKey.getEncoded());
 			output.flush();
 			output.close();
 			
@@ -126,15 +130,20 @@ public class User implements UserInterface {
 	public boolean sell() {
 		try {
 			MessageDigest digest = MessageDigest.getInstance("SHA-256");
-			String nounce = notary.getNounce("user1");
+			String nounce = notary.getNounce(this.id);
 			String cnounce = generateCNounce();
-			String str = nounce + cnounce + "user1" + "good2";
-			byte[] data = digest.digest(str.getBytes("UTF-8"));
-			System.out.println("> " + str);
-			System.out.println("> " + digest.getAlgorithm() + " " + bytesToHex(data));
-			System.out.println(notary.intentionToSell("user1", "good2", cnounce, data));
+			String str = nounce + cnounce + this.id + "good2";
+			System.out.println(str);
+			byte[] dataDigested = digest.digest(str.getBytes("UTF-8"));
 			
-		} catch (NoSuchAlgorithmException | RemoteException | UnsupportedEncodingException e) {
+			Signature dsaForSign = Signature.getInstance("SHA1withDSA");
+			dsaForSign.initSign(privateKey);
+			dsaForSign.update(dataDigested);
+			byte[] hashSigned = dsaForSign.sign();
+			
+			System.out.println(notary.intentionToSell(this.id, "good2", cnounce, dataDigested, hashSigned));
+			
+		} catch (NoSuchAlgorithmException | RemoteException | UnsupportedEncodingException | InvalidKeyException | SignatureException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}

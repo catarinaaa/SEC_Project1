@@ -14,10 +14,14 @@ import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -88,7 +92,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private static final long serialVersionUID = 1L;
 
 	@Override
-	public boolean intentionToSell(String userId, String goodId, String cnounce, byte[] hashBytes) throws RemoteException {
+	public boolean intentionToSell(String userId, String goodId, String cnounce, byte[] hashBytes, byte[] signature) throws RemoteException {
 		
 //		PublicKey publicKey = null ;
 //		try {
@@ -121,23 +125,18 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 //		} catch(Exception e) {
 //			return false;
 //		}
+	
+		
 		
 		try {
-			MessageDigest digest = MessageDigest.getInstance("SHA-256");
-			String toHash = nounceList.get(userId)+cnounce+userId+goodId;
-			byte[] hashed = digest.digest(toHash.getBytes("UTF-8"));
-			System.out.println("> " + toHash);
-			System.out.println("> " + digest.getAlgorithm() + " " + bytesToHex(hashed));
-			if(Arrays.equals(hashed, hashBytes)) {
-				System.out.println("Hashs are the same");
-			}
-			else {
-				System.out.println("ERROR!");
+						
+			String toHash = nounceList.get(userId) + cnounce + userId + goodId;
+			System.out.println(toHash);
+			if(!verifySignatureAndHash(toHash, hashBytes, signature, "pubKey-"+userId+".txt"))
 				return false;
-			}
 			
 			
-		} catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
+		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
@@ -154,11 +153,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return false;
 	}
 
+	
+
 	@Override
 	public State stateOfGood(String goodId) throws RemoteException {
 		Good good;
 		if((good = goodsList.get(goodId)) != null)
-			return new State(goodsList.get(goodId).getUserId(), goodsToSell.contains(goodId) ? true : false);
+			return new State(good.getUserId(), goodsToSell.contains(goodId) ? true : false);
 		else
 			return null;
 	}
@@ -249,6 +250,40 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	        hexString.append(hex);
 	    }
 	    return hexString.toString();
+	}
+	
+	private boolean verifySignatureAndHash(String dataStr, byte[] hashBytes, byte[] signature, String pubKeyPath)  {
+		try {
+			KeyFactory keyFactory = KeyFactory.getInstance("DSA");
+			FileInputStream pubKeyStream = new FileInputStream(pubKeyPath); 
+			int pubKeyLength = pubKeyStream.available();
+			byte[] pubKeyBytes = new byte[pubKeyLength];
+			pubKeyStream.read(pubKeyBytes);
+			pubKeyStream.close();
+			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
+			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
+			
+			Signature sig = Signature.getInstance("SHA1withDSA");
+			sig.initVerify(publicKey);
+			//sig.update(hashBytes);
+			
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			byte[] hashed = digest.digest(dataStr.getBytes("UTF-8"));
+			System.out.println("> " + digest.getAlgorithm() + " " + bytesToHex(hashed));
+			System.out.println("Received: " + bytesToHex(hashBytes));
+			sig.update(hashed);
+			if(Arrays.equals(hashed, hashBytes) && sig.verify(signature)) {
+				System.out.println("Hashs are the same and have not been modified");
+				return true;
+			}
+			else {
+				System.out.println("ERROR!");
+				return false;
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+			return false;
+		}
 	}
 	
 }

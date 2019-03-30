@@ -1,4 +1,4 @@
-package main.notary;
+package main.java.notary;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -10,15 +10,33 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
+import java.math.BigInteger;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Random;
 import java.util.TreeMap;
+
+import javax.crypto.Mac;
 
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
 	
 	private static NotaryImpl instance = null;
+	
+	private Random random = new Random();
 	
 	private int counter = 1;
 	
@@ -26,10 +44,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	
 	private ArrayList<String> goodsToSell = new ArrayList<String>();
 	
+	private TreeMap<String, String> nounceList = new TreeMap<>();
+	
 	private String path = "database.txt";
 	private File file = null;
 	private BufferedReader input = null;
 	private BufferedWriter output = null;
+	
+	private PrivateKey privateKey = null;
 	
 	protected NotaryImpl() throws RemoteException {
 		super();
@@ -73,7 +95,22 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private static final long serialVersionUID = 1L;
 
 	@Override
-	public boolean intentionToSell(String userId, String goodId) throws RemoteException {
+	public boolean intentionToSell(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
+	
+		try {
+						
+			String toHash = nounceList.get(userId) + cnounce + userId + goodId;
+			System.out.println(toHash);
+			if(!verifySignatureAndHash(toHash, signature, "pubKey-"+userId+".txt"))
+				return false;
+			
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
 		Good good;
 		
 		if((good = goodsList.get(goodId)) != null) {
@@ -85,17 +122,25 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return false;
 	}
 
+	
+
 	@Override
 	public State stateOfGood(String goodId) throws RemoteException {
 		Good good;
 		if((good = goodsList.get(goodId)) != null)
-			return new State(goodsList.get(goodId).getUserId(), goodsToSell.contains(goodId) ? true : false);
+			return new State(good.getUserId(), goodsToSell.contains(goodId) ? true : false);
 		else
 			return null;
 	}
 
 	@Override
-	public boolean transferGood(String sellerId, String buyerId, String goodId) throws RemoteException {
+	public boolean transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature) throws RemoteException {
+		
+		String toHash = nounceList.get(sellerId)+cnounce+sellerId+buyerId+goodId;
+		if(!verifySignatureAndHash(toHash, signature, "pubKey-"+sellerId+".txt"))
+			return false;
+		
+		
 		Good good;
 		if((good = goodsList.get(goodId)) != null) {
 			if(good.getUserId().equals(sellerId) && goodsToSell.contains(goodId)) {
@@ -103,9 +148,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				goodsList.put(goodId, good);
 				goodsToSell.remove(goodId);
 				saveTransfer(sellerId,buyerId,goodId);
+				printGoods();
 				return true;
 			}
 		}
+		printGoods();
 		return false;
 	}
 
@@ -153,6 +200,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			System.out.println(goodsList.get(id).getUserId() + " - " + id);
 		}
 	}
+
+	@Override
+	public String getNounce(String userId) throws RemoteException {
+		BigInteger nounce = new BigInteger(256, random);
+		nounceList.put(userId, nounce.toString());
+		return nounce.toString();
+	}
 	
 //	public void stop() {
 //		try {
@@ -164,5 +218,64 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 //		}
 //		
 //	}
+	
+	private static String bytesToHex(byte[] hash) {
+	    StringBuffer hexString = new StringBuffer();
+	    for (int i = 0; i < hash.length; i++) {
+	    String hex = Integer.toHexString(0xff & hash[i]);
+	    if(hex.length() == 1) hexString.append('0');
+	        hexString.append(hex);
+	    }
+	    return hexString.toString();
+	}
+	
+	private boolean verifySignatureAndHash(String dataStr, byte[] signature, String pubKeyPath)  {
+		try {
+			KeyFactory keyFactory = KeyFactory.getInstance("DSA");
+			FileInputStream pubKeyStream = new FileInputStream(pubKeyPath); 
+			int pubKeyLength = pubKeyStream.available();
+			byte[] pubKeyBytes = new byte[pubKeyLength];
+			pubKeyStream.read(pubKeyBytes);
+			pubKeyStream.close();
+			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
+			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
+			
+			Signature sig = Signature.getInstance("SHA1withDSA");
+			sig.initVerify(publicKey);
+			
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			byte[] hashed = digest.digest(dataStr.getBytes("UTF-8"));
+			sig.update(hashed);
+			if(sig.verify(signature)) {
+				System.out.println("Hashs are the same and have not been modified");
+				return true;
+			}
+			else {
+				System.out.println("ERROR!");
+				return false;
+			}
+		} catch(NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		} catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (SignatureException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidKeyException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidKeySpecException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return false;
+	}
 	
 }

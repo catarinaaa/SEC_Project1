@@ -1,4 +1,4 @@
-package main.client;
+package main.java.client;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -22,8 +22,8 @@ import java.security.SignatureException;
 import java.util.ArrayList;
 import java.util.Random;
 
-import main.notary.Good;
-import main.notary.NotaryInterface;
+import main.java.notary.Good;
+import main.java.notary.NotaryInterface;
 
 public class User implements UserInterface {
 	private final String id;
@@ -59,10 +59,7 @@ public class User implements UserInterface {
 				file.createNewFile();
 				System.out.println("Creating new file");
 			}
-			// changed true -> false
-			//BufferedWriter output = new BufferedWriter(new FileWriter(file, false));
 			FileOutputStream output = new FileOutputStream(path);
-			//output.write(id + " " + publicKey);
 			output.write(publicKey.getEncoded());
 			output.flush();
 			output.close();	

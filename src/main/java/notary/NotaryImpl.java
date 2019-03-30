@@ -1,4 +1,4 @@
-package main.notary;
+package main.java.notary;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -18,6 +18,7 @@ import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.SignatureException;
@@ -49,6 +50,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private File file = null;
 	private BufferedReader input = null;
 	private BufferedWriter output = null;
+	
+	private PrivateKey privateKey = null;
 	
 	protected NotaryImpl() throws RemoteException {
 		super();

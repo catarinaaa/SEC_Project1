@@ -1,4 +1,4 @@
-package main.notary;
+package main.java.notary;
 
 public class Good {
 	private String userId;

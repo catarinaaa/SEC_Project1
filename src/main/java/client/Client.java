@@ -1,4 +1,4 @@
-package main.client;
+package main.java.client;
 
 import java.net.MalformedURLException;
 import java.rmi.Naming;
@@ -6,7 +6,7 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.security.NoSuchAlgorithmException;
 
-import main.notary.NotaryInterface;
+import main.java.notary.NotaryInterface;
 
 public class Client {
 	public static void main(String args[]) {

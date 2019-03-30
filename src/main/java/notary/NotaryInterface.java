@@ -1,4 +1,4 @@
-package main.notary;
+package main.java.notary;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;

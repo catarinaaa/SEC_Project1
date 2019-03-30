@@ -1,6 +1,7 @@
 package main.java.client;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -10,6 +11,7 @@ import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.security.InvalidKeyException;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
@@ -19,11 +21,14 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Random;
 
 import main.java.notary.Good;
 import main.java.notary.NotaryInterface;
+import main.java.notary.TransferResult;
 
 public class User implements UserInterface {
 	private final String id;
@@ -98,9 +103,46 @@ public class User implements UserInterface {
 		byte[] hashedData = hashMessage(data);
 		byte[] signedHashedData = signByteArray(hashedData);
 		
-		return notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData).getResult();
+		TransferResult result = notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData);
+		
+		if(verifyResult(result, data))
+			return result.getResult();
+		else {
+			System.out.println("Signature does not verify!");
+			return false;
+		} 
 	}
 	
+	private boolean verifyResult(TransferResult result, String msg) {
+		try {
+			KeyFactory keyFactory = KeyFactory.getInstance("DSA");
+			FileInputStream pubKeyStream = new FileInputStream("notaryPublicKey.txt");
+			int pubKeyLength = pubKeyStream.available();
+			byte[] pubKeyBytes = new byte[pubKeyLength];
+			pubKeyStream.read(pubKeyBytes);
+			pubKeyStream.close();
+			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
+			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
+			
+			Signature sig = Signature.getInstance("SHA1withDSA");
+			sig.initVerify(publicKey);
+			
+			byte[] hashedMsg = hashMessage(msg+result.getResult());
+			sig.update(hashedMsg);
+			if(sig.verify(result.getSignature()))
+				return true;
+			else
+				return false;
+			
+		} catch (NoSuchAlgorithmException | IOException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		
+		return false;
+	}
+
 	public void test() throws Exception {
 		byte[] data = "Hey, this was signed".getBytes();
 		Signature dsaForSign = Signature.getInstance("SHA1withDSA");

@@ -167,7 +167,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		String msg = nounceList.get(sellerId)+cnounce+sellerId+buyerId+goodId;
 		
 		if(!verifySignatureAndHash(msg, signature, "pubKey-"+sellerId+".txt")) {
-			return new TransferResult(false, signMessage(msg));
+			return new TransferResult(false, signMessage(msg+"false"));
 		}
 			
 		

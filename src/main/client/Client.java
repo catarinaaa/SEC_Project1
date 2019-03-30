@@ -33,8 +33,8 @@ public class Client {
 			
 			User u = new User("user1");
 			
-			u.sell();
-			System.out.println("Transfer>" + u.buyGood("user2", "good2"));
+			u.sell("good1");
+			System.out.println("Transfer > " + u.buyGood("user2", "good1"));
 			
 			
 		} catch (MalformedURLException | RemoteException | NotBoundException e) {

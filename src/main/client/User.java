@@ -110,7 +110,7 @@ public class User implements UserInterface {
 		byte[] hashedData = hashMessage(data);
 		byte[] signedHashedData = signByteArray(hashedData);
 		
-		return notary.transferGood(this.getId(), userId, goodId, cnounce, hashedData, signedHashedData);
+		return notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData);
 	}
 	
 	public void test() throws Exception {
@@ -127,17 +127,16 @@ public class User implements UserInterface {
 	}
 	
 	
-	public boolean sell() {
+	public boolean sell(String goodId) {
 		try {
-			
 			String nounce = notary.getNounce(this.id);
 			String cnounce = generateCNounce();
-			String str = nounce + cnounce + this.id + "good2";
+			String str = nounce + cnounce + this.id + goodId;
 			System.out.println(str);
 			byte[] dataDigested = hashMessage(str);
 			byte[] hashSigned = signByteArray(dataDigested);
 			
-			System.out.println("Intention > " +notary.intentionToSell(this.id, "good2", cnounce, dataDigested, hashSigned));
+			System.out.println("Intention > " +notary.intentionToSell(this.id, goodId, cnounce, hashSigned));
 			
 		} catch (RemoteException e) {
 			// TODO Auto-generated catch block

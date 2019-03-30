@@ -16,21 +16,20 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
-
-import javax.crypto.Mac;
 
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
 	
@@ -52,6 +51,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private BufferedWriter output = null;
 	
 	private PrivateKey privateKey = null;
+	private PublicKey publicKey = null;
+	
+	Signature signature;
 	
 	protected NotaryImpl() throws RemoteException {
 		super();
@@ -64,14 +66,40 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				file.createNewFile();
 				System.out.println("Creating new file");
 			}
+			
+			// generate public/private keys
+			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			// !!!!!! IMPLEMENT CARTAO DO CIDADAO !!!!!!
+			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			KeyPair pair = generateKeys();
+			
+			privateKey = pair.getPrivate();
+			publicKey = pair.getPublic();			
+			writePublicKeyToFile();
+			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			
+			signature = Signature.getInstance("SHA1withDSA");
+			signature.initSign(privateKey);
+			
 			input = new BufferedReader(new FileReader(file));
 			output = new BufferedWriter(new FileWriter(file, true));
 			recoverTransactions();
 			printGoods();
-		} catch (IOException e) {
+			
+		} catch (IOException | NoSuchAlgorithmException | InvalidKeyException e) {
 			e.printStackTrace();
 			System.exit(1);
 		}
+	}
+
+	private KeyPair generateKeys() throws NoSuchAlgorithmException {
+		//Gerar par de chave publica e privada
+		KeyPairGenerator keygen = KeyPairGenerator.getInstance("DSA");
+		
+		SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
+		keygen.initialize(1024, random);
+		KeyPair pair = keygen.generateKeyPair();
+		return pair;
 	}
 
 	private void recoverTransactions() throws IOException {
@@ -134,12 +162,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public boolean transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature) throws RemoteException {
+	public TransferResult transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature) throws RemoteException {
 		
-		String toHash = nounceList.get(sellerId)+cnounce+sellerId+buyerId+goodId;
-		if(!verifySignatureAndHash(toHash, signature, "pubKey-"+sellerId+".txt"))
-			return false;
+		String msg = nounceList.get(sellerId)+cnounce+sellerId+buyerId+goodId;
 		
+		if(!verifySignatureAndHash(msg, signature, "pubKey-"+sellerId+".txt")) {
+			return new TransferResult(false, signMessage(msg));
+		}
+			
 		
 		Good good;
 		if((good = goodsList.get(goodId)) != null) {
@@ -149,11 +179,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				goodsToSell.remove(goodId);
 				saveTransfer(sellerId,buyerId,goodId);
 				printGoods();
-				return true;
+				return new TransferResult(true, signMessage(msg+"true"));
 			}
 		}
 		printGoods();
-		return false;
+		return new TransferResult(false, signMessage(msg+"false"));
 	}
 
 	private void saveTransfer(String sellerId, String buyerId, String goodId) {
@@ -194,7 +224,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 		return instance;
 	}
-	
+//	
+//	private byte[] signMessage(String message) {
+//		signature.ini
+//	}
+//	
 	public void printGoods() {
 		for (String id : goodsList.keySet()) {
 			System.out.println(goodsList.get(id).getUserId() + " - " + id);
@@ -276,6 +310,33 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			e.printStackTrace();
 		}
 		return false;
+	}
+	
+	private void writePublicKeyToFile() throws IOException {
+		File file = new File("notaryPublicKey.txt");
+		if(!file.exists()) {
+			file.createNewFile();
+			System.out.println("Creating new file");
+		}
+		FileOutputStream output = new FileOutputStream("notaryPublicKey.txt");
+		output.write(publicKey.getEncoded());
+		output.flush();
+		output.close();	
+
+	}
+	
+	private byte[] signMessage(String message) {
+		MessageDigest digest;
+		try {
+			digest = MessageDigest.getInstance("SHA-256");
+			byte[] digested = digest.digest(message.getBytes("UTF-8"));
+			signature.update(digested);
+			return signature.sign();
+		} catch (NoSuchAlgorithmException | UnsupportedEncodingException | SignatureException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
 	}
 	
 }

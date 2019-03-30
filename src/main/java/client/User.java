@@ -98,7 +98,7 @@ public class User implements UserInterface {
 		byte[] hashedData = hashMessage(data);
 		byte[] signedHashedData = signByteArray(hashedData);
 		
-		return notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData);
+		return notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData).getResult();
 	}
 	
 	public void test() throws Exception {

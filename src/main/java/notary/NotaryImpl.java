@@ -1,4 +1,4 @@
-package main.notary;
+package main.java.notary;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -18,6 +18,7 @@ import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.SignatureException;
@@ -49,6 +50,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private File file = null;
 	private BufferedReader input = null;
 	private BufferedWriter output = null;
+	
+	private PrivateKey privateKey = null;
 	
 	protected NotaryImpl() throws RemoteException {
 		super();
@@ -92,47 +95,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private static final long serialVersionUID = 1L;
 
 	@Override
-	public boolean intentionToSell(String userId, String goodId, String cnounce, byte[] hashBytes, byte[] signature) throws RemoteException {
-		
-//		PublicKey publicKey = null ;
-//		try {
-//		FileInputStream keyfis = new FileInputStream("suepk");
-//		byte[] encKey = new byte[keyfis.available()];  
-//		keyfis.read(encKey);
-//		
-//		keyfis.close();
-//		
-//		X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(encKey);
-//		KeyFactory keyFactory = KeyFactory.getInstance("DSA", "SUN");
-//		publicKey = keyFactory.generatePublic(pubKeySpec);
-//		
-//		
-//		Mac mac = Mac.getInstance("HmacSHA256");
-//		byte[] data = new String(userId+"-"+goodId).getBytes();
-//		mac.init(publicKey);
-//		mac.update(data);
-//		byte[] macBytesLocal = mac.doFinal();
-//		
-//		if(Arrays.equals(macBytesLocal, macBytes)) {
-//			System.out.println("Nice!");
-//		}
-//		else {
-//			System.out.println("OH NO NONO");
-//		}
-//		
-//		
-//		
-//		} catch(Exception e) {
-//			return false;
-//		}
+	public boolean intentionToSell(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
 	
-		
-		
 		try {
 						
 			String toHash = nounceList.get(userId) + cnounce + userId + goodId;
 			System.out.println(toHash);
-			if(!verifySignatureAndHash(toHash, hashBytes, signature, "pubKey-"+userId+".txt"))
+			if(!verifySignatureAndHash(toHash, signature, "pubKey-"+userId+".txt"))
 				return false;
 			
 			
@@ -165,10 +134,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public boolean transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] hashBytes, byte[] signature) throws RemoteException {
+	public boolean transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature) throws RemoteException {
 		
 		String toHash = nounceList.get(sellerId)+cnounce+sellerId+buyerId+goodId;
-		if(!verifySignatureAndHash(toHash, hashBytes, signature, "pubKey-"+sellerId+".txt"))
+		if(!verifySignatureAndHash(toHash, signature, "pubKey-"+sellerId+".txt"))
 			return false;
 		
 		
@@ -260,7 +229,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	    return hexString.toString();
 	}
 	
-	private boolean verifySignatureAndHash(String dataStr, byte[] hashBytes, byte[] signature, String pubKeyPath)  {
+	private boolean verifySignatureAndHash(String dataStr, byte[] signature, String pubKeyPath)  {
 		try {
 			KeyFactory keyFactory = KeyFactory.getInstance("DSA");
 			FileInputStream pubKeyStream = new FileInputStream(pubKeyPath); 
@@ -273,14 +242,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			
 			Signature sig = Signature.getInstance("SHA1withDSA");
 			sig.initVerify(publicKey);
-			//sig.update(hashBytes);
 			
 			MessageDigest digest = MessageDigest.getInstance("SHA-256");
 			byte[] hashed = digest.digest(dataStr.getBytes("UTF-8"));
-			System.out.println("> " + digest.getAlgorithm() + " " + bytesToHex(hashed));
-			System.out.println("Received: " + bytesToHex(hashBytes));
 			sig.update(hashed);
-			if(Arrays.equals(hashed, hashBytes) && sig.verify(signature)) {
+			if(sig.verify(signature)) {
 				System.out.println("Hashs are the same and have not been modified");
 				return true;
 			}

@@ -1,18 +1,11 @@
-package main.client;
+package main.java.client;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.net.MalformedURLException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -29,10 +22,8 @@ import java.security.SignatureException;
 import java.util.ArrayList;
 import java.util.Random;
 
-import javax.crypto.Mac;
-
-import main.notary.Good;
-import main.notary.NotaryInterface;
+import main.java.notary.Good;
+import main.java.notary.NotaryInterface;
 
 public class User implements UserInterface {
 	private final String id;
@@ -68,10 +59,7 @@ public class User implements UserInterface {
 				file.createNewFile();
 				System.out.println("Creating new file");
 			}
-			// changed true -> false
-			//BufferedWriter output = new BufferedWriter(new FileWriter(file, false));
 			FileOutputStream output = new FileOutputStream(path);
-			//output.write(id + " " + publicKey);
 			output.write(publicKey.getEncoded());
 			output.flush();
 			output.close();	
@@ -110,7 +98,7 @@ public class User implements UserInterface {
 		byte[] hashedData = hashMessage(data);
 		byte[] signedHashedData = signByteArray(hashedData);
 		
-		return notary.transferGood(this.getId(), userId, goodId, cnounce, hashedData, signedHashedData);
+		return notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData);
 	}
 	
 	public void test() throws Exception {
@@ -127,17 +115,16 @@ public class User implements UserInterface {
 	}
 	
 	
-	public boolean sell() {
+	public boolean sell(String goodId) {
 		try {
-			
 			String nounce = notary.getNounce(this.id);
 			String cnounce = generateCNounce();
-			String str = nounce + cnounce + this.id + "good2";
+			String str = nounce + cnounce + this.id + goodId;
 			System.out.println(str);
 			byte[] dataDigested = hashMessage(str);
 			byte[] hashSigned = signByteArray(dataDigested);
 			
-			System.out.println("Intention > " +notary.intentionToSell(this.id, "good2", cnounce, dataDigested, hashSigned));
+			System.out.println("Intention > " +notary.intentionToSell(this.id, goodId, cnounce, hashSigned));
 			
 		} catch (RemoteException e) {
 			// TODO Auto-generated catch block

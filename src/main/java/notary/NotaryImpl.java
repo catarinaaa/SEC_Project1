@@ -32,60 +32,64 @@ import java.util.Random;
 import java.util.TreeMap;
 
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
-	
+
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
 	private static NotaryImpl instance = null;
-	
+
 	private Random random = new Random();
-	
+
 	private int counter = 1;
-	
+
 	private TreeMap<String, Good> goodsList = new TreeMap<>();
-	
+
 	private ArrayList<String> goodsToSell = new ArrayList<String>();
-	
+
 	private TreeMap<String, String> nounceList = new TreeMap<>();
-	
+
 	private String path = "database.txt";
 	private File file = null;
 	private BufferedReader input = null;
 	private BufferedWriter output = null;
-	
+
 	private PrivateKey privateKey = null;
 	private PublicKey publicKey = null;
-	
+
 	Signature signature;
-	
+
 	protected NotaryImpl() throws RemoteException {
 		super();
 		populateList();
-		
-		
+
 		try {
 			file = new File(path);
-			if(!file.exists()) {
+			if (!file.exists()) {
 				file.createNewFile();
 				System.out.println("Creating new file");
 			}
-			
+
 			// generate public/private keys
 			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			// !!!!!! IMPLEMENT CARTAO DO CIDADAO !!!!!!
 			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			KeyPair pair = generateKeys();
-			
+
 			privateKey = pair.getPrivate();
-			publicKey = pair.getPublic();			
+			publicKey = pair.getPublic();
 			writePublicKeyToFile();
 			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			
+
 			signature = Signature.getInstance("SHA1withDSA");
 			signature.initSign(privateKey);
-			
+
 			input = new BufferedReader(new FileReader(file));
 			output = new BufferedWriter(new FileWriter(file, true));
 			recoverTransactions();
 			printGoods();
-			
+
 		} catch (IOException | NoSuchAlgorithmException | InvalidKeyException e) {
 			e.printStackTrace();
 			System.exit(1);
@@ -93,9 +97,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private KeyPair generateKeys() throws NoSuchAlgorithmException {
-		//Gerar par de chave publica e privada
+		// Gerar par de chave publica e privada
 		KeyPairGenerator keygen = KeyPairGenerator.getInstance("DSA");
-		
+
 		SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
 		keygen.initialize(1024, random);
 		KeyPair pair = keygen.generateKeyPair();
@@ -107,114 +111,114 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		String line;
 		String[] splitLine;
 		Good good;
-		while((line = input.readLine()) != null) {
+		while ((line = input.readLine()) != null) {
 			splitLine = line.split(";");
 			System.out.println("Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
 			good = goodsList.get(splitLine[2]);
 			good.setUserId(splitLine[1]);
 			goodsList.put(splitLine[2], good);
 		}
-		
+
 	}
 
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 1L;
-
 	@Override
-	public boolean intentionToSell(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
-	
+	public Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature)
+			throws RemoteException {
+
+		String toHash = "";
+
 		try {
-						
-			String toHash = nounceList.get(userId) + cnounce + userId + goodId;
+
+			toHash = nounceList.get(userId) + cnounce + userId + goodId;
 			System.out.println(toHash);
-			if(!verifySignatureAndHash(toHash, signature, "pubKey-"+userId+".txt"))
-				return false;
-			
-			
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-		
-		Good good;
-		
-		if((good = goodsList.get(goodId)) != null) {
-			if(good.getUserId().equals(userId) && !goodsToSell.contains(good.getGoodId())) {
-				goodsToSell.add(good.getGoodId());
-				return true;
+			if (!verifySignatureAndHash(toHash, signature, userId))
+				return new Result(false, cnounce, signMessage(toHash + "false"));
+
+			Good good;
+
+			if ((good = goodsList.get(goodId)) != null) {
+				if (good.getUserId().equals(userId) && !goodsToSell.contains(good.getGoodId())) {
+					goodsToSell.add(good.getGoodId());
+					return new Result(true, cnounce, signMessage(toHash + "true"));
+				}
 			}
+
+			return new Result(false, cnounce, signMessage(toHash + "false"));
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			return new Result(false, cnounce, signMessage(toHash + "false"));
 		}
-		return false;
+
 	}
 
-	
-
 	@Override
-	public State stateOfGood(String goodId) throws RemoteException {
+	public State stateOfGood(String userId, String cnounce, String goodId) throws RemoteException {
 		Good good;
-		if((good = goodsList.get(goodId)) != null)
-			return new State(good.getUserId(), goodsToSell.contains(goodId) ? true : false);
-		else
+		if ((good = goodsList.get(goodId)) != null) {
+			boolean status = goodsToSell.contains(goodId);
+			String toSign = nounceList.get(userId) + cnounce + goodId + good.getUserId() + status;
+
+			return new State(good.getUserId(), status, cnounce, signMessage(toSign));
+		} else
 			return null;
 	}
 
 	@Override
-	public TransferResult transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature) throws RemoteException {
-		
-		String msg = nounceList.get(sellerId)+cnounce+sellerId+buyerId+goodId;
-		
-		if(!verifySignatureAndHash(msg, signature, "pubKey-"+sellerId+".txt")) {
-			return new TransferResult(false, signMessage(msg+"false"));
+	public Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature)
+			throws RemoteException {
+
+		String msg = nounceList.get(sellerId) + cnounce + sellerId + buyerId + goodId;
+
+		if (!verifySignatureAndHash(msg, signature, sellerId)) {
+			return new Result(false, cnounce, signMessage(msg + "false"));
 		}
-			
-		
+
 		Good good;
-		if((good = goodsList.get(goodId)) != null) {
-			if(good.getUserId().equals(sellerId) && goodsToSell.contains(goodId)) {
+		if ((good = goodsList.get(goodId)) != null) {
+			if (good.getUserId().equals(sellerId) && goodsToSell.contains(goodId)) {
 				good.setUserId(buyerId);
 				goodsList.put(goodId, good);
 				goodsToSell.remove(goodId);
-				saveTransfer(sellerId,buyerId,goodId);
+				saveTransfer(sellerId, buyerId, goodId);
 				printGoods();
-				return new TransferResult(true, signMessage(msg+"true"));
+				System.out.println(msg+"true");
+				return new Result(true, cnounce, signMessage(msg + "true"));
 			}
 		}
 		printGoods();
-		return new TransferResult(false, signMessage(msg+"false"));
+		return new Result(false, cnounce, signMessage(msg + "false"));
 	}
 
 	private void saveTransfer(String sellerId, String buyerId, String goodId) {
 		try {
-			output.write(sellerId+";"+buyerId+";"+goodId+"\n");
+			output.write(sellerId + ";" + buyerId + ";" + goodId + "\n");
 			output.flush();
 		} catch (IOException e) {
 			System.out.println("Error writing to file");
 			e.printStackTrace();
-		}		
+		}
 	}
 
 	@Override
 	public String sayHello() throws RemoteException {
 		System.out.println("Hey!");
-		return "Hello " + counter++ ;
+		return "Hello " + counter++;
 	}
-	
+
 	private void populateList() {
-		
+
 		goodsList.put("good1", new Good("user1", "good1"));
 		goodsList.put("good2", new Good("user1", "good2"));
 		goodsList.put("good3", new Good("user1", "good3"));
 		goodsList.put("good4", new Good("user2", "good4"));
 		goodsList.put("good5", new Good("user3", "good5"));
 		goodsList.put("good6", new Good("user3", "good6"));
-		
+
 	}
-	
+
 	public static NotaryImpl getInstance() {
-		if(instance == null) {
+		if (instance == null) {
 			try {
 				instance = new NotaryImpl();
 			} catch (RemoteException e) {
@@ -224,11 +228,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 		return instance;
 	}
-//	
-//	private byte[] signMessage(String message) {
-//		signature.ini
-//	}
-//	
+
 	public void printGoods() {
 		for (String id : goodsList.keySet()) {
 			System.out.println(goodsList.get(id).getUserId() + " - " + id);
@@ -241,7 +241,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		nounceList.put(userId, nounce.toString());
 		return nounce.toString();
 	}
-	
+
 //	public void stop() {
 //		try {
 //			input.close();
@@ -252,43 +252,44 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 //		}
 //		
 //	}
-	
+
 	private static String bytesToHex(byte[] hash) {
-	    StringBuffer hexString = new StringBuffer();
-	    for (int i = 0; i < hash.length; i++) {
-	    String hex = Integer.toHexString(0xff & hash[i]);
-	    if(hex.length() == 1) hexString.append('0');
-	        hexString.append(hex);
-	    }
-	    return hexString.toString();
+		StringBuffer hexString = new StringBuffer();
+		for (int i = 0; i < hash.length; i++) {
+			String hex = Integer.toHexString(0xff & hash[i]);
+			if (hex.length() == 1)
+				hexString.append('0');
+			hexString.append(hex);
+		}
+		return hexString.toString();
 	}
-	
-	private boolean verifySignatureAndHash(String dataStr, byte[] signature, String pubKeyPath)  {
+
+	private boolean verifySignatureAndHash(String dataStr, byte[] signature, String userId) {
 		try {
+			String pubKeyPath = "pubKey-" + userId + ".txt";
 			KeyFactory keyFactory = KeyFactory.getInstance("DSA");
-			FileInputStream pubKeyStream = new FileInputStream(pubKeyPath); 
+			FileInputStream pubKeyStream = new FileInputStream(pubKeyPath);
 			int pubKeyLength = pubKeyStream.available();
 			byte[] pubKeyBytes = new byte[pubKeyLength];
 			pubKeyStream.read(pubKeyBytes);
 			pubKeyStream.close();
 			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
 			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
-			
+
 			Signature sig = Signature.getInstance("SHA1withDSA");
 			sig.initVerify(publicKey);
-			
+
 			MessageDigest digest = MessageDigest.getInstance("SHA-256");
 			byte[] hashed = digest.digest(dataStr.getBytes("UTF-8"));
 			sig.update(hashed);
-			if(sig.verify(signature)) {
+			if (sig.verify(signature)) {
 				System.out.println("Hashs are the same and have not been modified");
 				return true;
-			}
-			else {
+			} else {
 				System.out.println("ERROR!");
 				return false;
 			}
-		} catch(NoSuchAlgorithmException e) {
+		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
 		} catch (UnsupportedEncodingException e) {
 			// TODO Auto-generated catch block
@@ -311,20 +312,20 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 		return false;
 	}
-	
+
 	private void writePublicKeyToFile() throws IOException {
 		File file = new File("notaryPublicKey.txt");
-		if(!file.exists()) {
+		if (!file.exists()) {
 			file.createNewFile();
 			System.out.println("Creating new file");
 		}
 		FileOutputStream output = new FileOutputStream("notaryPublicKey.txt");
 		output.write(publicKey.getEncoded());
 		output.flush();
-		output.close();	
+		output.close();
 
 	}
-	
+
 	private byte[] signMessage(String message) {
 		MessageDigest digest;
 		try {
@@ -338,5 +339,5 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 		return null;
 	}
-	
+
 }

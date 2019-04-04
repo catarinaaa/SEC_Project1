@@ -25,3 +25,6 @@ hs_err_pid*
 
 # All extra files, namely database and publikeys
 *.txt
+
+# KDE .directory file
+.directory

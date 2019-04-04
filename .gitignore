@@ -28,3 +28,13 @@ hs_err_pid*
 
 # KDE .directory file
 .directory
+
+# Maven
+target/
+
+# Eclipse files
+.project
+.classpath
+.metadata/
+.settings/
+.recommenders/

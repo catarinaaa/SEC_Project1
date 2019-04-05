@@ -91,15 +91,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			signature = Signature.getInstance(ALGORITHM);
 			signature.initSign(privateKey);
 
-			// Missing recovering goodsToSell list
-			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			// Recovering list of goods to sell
 			inputSellings = new BufferedReader(new FileReader(sellingListFile));
 			outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
 			recoverSellingList();
 			printSellingList();
 			
 			
-			//Recovering transactions from database
+			//Recovering transactions from transactions file
 			inputTransactions = new BufferedReader(new FileReader(transactionsFile));
 			outputTransactions= new BufferedWriter(new FileWriter(transactionsFile, true));
 			recoverTransactions();
@@ -136,20 +135,16 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			throws RemoteException {
 
 		String toHash = "";
-		System.out.println("1 --> INTENTION TO SELL SHOULD WRITE TO FILE!!!!!!!!");
 		try {
-			System.out.println("2 ---> INTENTION TO SELL SHOULD WRITE TO FILE!!!!!!!!");
 			toHash = nounceList.get(userId) + cnounce + userId + goodId;
 			System.out.println(toHash);
 			if (!verifySignatureAndHash(toHash, signature, userId))
 				return new Result(false, cnounce, signMessage(toHash + "false"));
 			
-			System.out.println("3 ----> INTENTION TO SELL SHOULD WRITE TO FILE!!!!!!!!");
 			Good good;
 
 			if ((good = goodsList.get(goodId)) != null) {
 				if (good.getUserId().equals(userId) && !goodsToSell.contains(good.getGoodId())) {
-					System.out.println("4 -----> INTENTION TO SELL SHOULD WRITE TO FILE!!!!!!!!");
 					goodsToSell.add(good.getGoodId());
 					sellingListUpdate(userId, good.getGoodId());
 					return new Result(true, cnounce, signMessage(toHash + "true"));

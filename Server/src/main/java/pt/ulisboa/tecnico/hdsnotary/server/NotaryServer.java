@@ -2,6 +2,8 @@ package pt.ulisboa.tecnico.hdsnotary.server;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.util.ArrayList;
+import java.util.TreeMap;
 
 public class NotaryServer {
 

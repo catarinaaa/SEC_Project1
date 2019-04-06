@@ -28,8 +28,6 @@ import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
-import java.util.Map.Entry;
-import java.util.Random;
 import java.util.TreeMap;
 import pt.ulisboa.tecnico.hdsnotary.library.*;
 
@@ -45,7 +43,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private static NotaryImpl instance = null;
 
 	// To be changed **********************
-	private Random random = new Random();
+	private SecureRandom secRandom = new SecureRandom();
     // ************************************
 	
     // List containing all goods
@@ -125,7 +123,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	// Override NotaryInterface functions
 	@Override
 	public String getNounce(String userId) throws RemoteException {
-		BigInteger nounce = new BigInteger(256, random);
+		BigInteger nounce = new BigInteger(256, secRandom);
 		nounceList.put(userId, nounce.toString());
 		return nounce.toString();
 	}
@@ -277,6 +275,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 	
 	private void printSellingList() {
+		System.out.println("Recovering SELLING list");
 		for (String entry : goodsToSell) 
 		    System.out.println("Good " + entry + " is selling");
 	}

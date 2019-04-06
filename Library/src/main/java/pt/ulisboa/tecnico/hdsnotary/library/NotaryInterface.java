@@ -15,4 +15,6 @@ public interface NotaryInterface extends Remote {
 	Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature)
 			throws RemoteException;
 
+	String sayHello() throws RemoteException; //Porque é que isto está aqui?
+
 }

@@ -86,8 +86,22 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			signature = Signature.getInstance("SHA1withDSA");
 			signature.initSign(privateKey);
 
+<<<<<<< HEAD
 			input = new BufferedReader(new FileReader(file));
 			output = new BufferedWriter(new FileWriter(file, true));
+=======
+			// Missing recovering goodsToSell list
+			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			inputSellings = new BufferedReader(new FileReader(sellingListFile));
+			outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
+			recoverSellingList();
+			printSellingList();
+			
+			
+			//Recovering transactions from database
+			inputTransactions = new BufferedReader(new FileReader(transactionsFile));
+			outputTransactions= new BufferedWriter(new FileWriter(transactionsFile, true));
+>>>>>>> parent of 3a0c247... remove printing debugs and adding commenting code
 			recoverTransactions();
 			printGoods();
 
@@ -127,18 +141,30 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			throws RemoteException {
 
 		String toHash = "";
+<<<<<<< HEAD
 
 		try {
 
+=======
+		System.out.println("1 --> INTENTION TO SELL SHOULD WRITE TO FILE!!!!!!!!");
+		try {
+			System.out.println("2 ---> INTENTION TO SELL SHOULD WRITE TO FILE!!!!!!!!");
+>>>>>>> parent of 3a0c247... remove printing debugs and adding commenting code
 			toHash = nounceList.get(userId) + cnounce + userId + goodId;
 			System.out.println(toHash);
 			if (!verifySignatureAndHash(toHash, signature, userId))
 				return new Result(false, cnounce, signMessage(toHash + "false"));
+<<<<<<< HEAD
 
+=======
+			
+			System.out.println("3 ----> INTENTION TO SELL SHOULD WRITE TO FILE!!!!!!!!");
+>>>>>>> parent of 3a0c247... remove printing debugs and adding commenting code
 			Good good;
 
 			if ((good = goodsList.get(goodId)) != null) {
 				if (good.getUserId().equals(userId) && !goodsToSell.contains(good.getGoodId())) {
+					System.out.println("4 -----> INTENTION TO SELL SHOULD WRITE TO FILE!!!!!!!!");
 					goodsToSell.add(good.getGoodId());
 					return new Result(true, cnounce, signMessage(toHash + "true"));
 				}

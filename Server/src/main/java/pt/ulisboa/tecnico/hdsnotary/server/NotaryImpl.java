@@ -28,7 +28,6 @@ import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
-import java.util.Random;
 import java.util.TreeMap;
 import pt.ulisboa.tecnico.hdsnotary.library.*;
 
@@ -42,7 +41,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private static NotaryImpl instance = null;
 
-	private Random random = new Random();
+	private SecureRandom secRandom = new SecureRandom();
 
 	private int counter = 1;
 	private TreeMap<String, Good> goodsList = new TreeMap<>();
@@ -102,8 +101,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		// Gerar par de chave publica e privada
 		KeyPairGenerator keygen = KeyPairGenerator.getInstance("DSA");
 
-		SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
-		keygen.initialize(1024, random);
+		secRandom = SecureRandom.getInstance("SHA1PRNG");
+		keygen.initialize(1024, secRandom);
 		KeyPair pair = keygen.generateKeyPair();
 		return pair;
 	}
@@ -203,7 +202,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public String sayHello() throws RemoteException {
+	public String sayHello() throws RemoteException {  //Suponho que isto seja para apagar
 		System.out.println("Hey!");
 		return "Hello " + counter++;
 	}
@@ -239,7 +238,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	@Override
 	public String getNounce(String userId) throws RemoteException {
-		BigInteger nounce = new BigInteger(256, random);
+		BigInteger nounce = new BigInteger(256, secRandom);
 		nounceList.put(userId, nounce.toString());
 		return nounce.toString();
 	}

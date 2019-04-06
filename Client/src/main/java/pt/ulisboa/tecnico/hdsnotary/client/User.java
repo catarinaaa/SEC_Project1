@@ -28,66 +28,42 @@ import java.util.Random;
 
 import pt.ulisboa.tecnico.hdsnotary.library.*;
 
-
-
 public class User implements UserInterface {
 	private static final String SIGNATURE_ALGORITHM = "SHA1withDSA";
 	private static final String ALGORITHM = "DSA";
 	private static final String NOTARYPUBKEYPATH = "../Server/storage/notaryPublicKey.txt";
 
 	private final String id;
+	// List of all goods possessed
 	private ArrayList<Good> goods;
-	NotaryInterface notary = null;
-	private String path = "keys.txt";
+	// Instance of remote Notary Object
+	private NotaryInterface notary = null;
+	private String publicKeyPath;
 	private Random random = new Random();
-
-	private KeyFactory keyFactory = null;
 
 	PrivateKey privateKey;
 	PublicKey publicKey;
 
-	public User(String id, NotaryInterface notary) {
+	public User(String id, NotaryInterface notary) throws IOException, NoSuchAlgorithmException {
 		super();
 		this.id = id;
 		this.notary = notary;
-		this.path = "../Server/storage/pubKey-" + id + ".txt";
+		this.publicKeyPath = "../Server/storage/pubKey-" + id + ".txt";
 
 		System.out.println("Initializing User");
 
-		try {
-			keyFactory = KeyFactory.getInstance(ALGORITHM);
+		// Gerar par de chave publica e privada
+		KeyPairGenerator keygen = KeyPairGenerator.getInstance("DSA");
 
-			// Gerar par de chave publica e privada
-			KeyPairGenerator keygen = KeyPairGenerator.getInstance("DSA");
+		SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
+		keygen.initialize(1024, random);
+		KeyPair pair = keygen.generateKeyPair();
 
-			SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
-			keygen.initialize(1024, random);
-			KeyPair pair = keygen.generateKeyPair();
-
-			privateKey = pair.getPrivate();
-			publicKey = pair.getPublic();
-
-		} catch (NoSuchAlgorithmException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
+		privateKey = pair.getPrivate();
+		publicKey = pair.getPublic();
 
 		// Escrever chaves para keys.txt
-		try {
-			File file = new File(path);
-			if (!file.exists()) {
-				file.createNewFile();
-				System.out.println("Creating new file");
-			}
-			FileOutputStream output = new FileOutputStream(path);
-			output.write(publicKey.getEncoded());
-			output.flush();
-			output.close();
-
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
+		writePublicKeyToFile();
 
 	}
 
@@ -108,76 +84,15 @@ public class User implements UserInterface {
 		byte[] signedHashedData = signByteArray(hashedData);
 
 		Result result = notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData);
-		
+
 		System.out.println("> " + data + result.getResult());
-		
+
 		if (verifySignature(data + result.getResult(), result.getSignature()))
 			return result.getResult();
 		else {
 			System.out.println("Signature does not verify!");
 			return false;
 		}
-	}
-
-	private boolean verifyResult(Result result, String msg) {
-		try {
-			KeyFactory keyFactory = KeyFactory.getInstance("DSA");
-			FileInputStream pubKeyStream = new FileInputStream(NOTARYPUBKEYPATH);
-			int pubKeyLength = pubKeyStream.available();
-			byte[] pubKeyBytes = new byte[pubKeyLength];
-			pubKeyStream.read(pubKeyBytes);
-			pubKeyStream.close();
-			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
-			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
-
-			Signature sig = Signature.getInstance("SHA1withDSA");
-			sig.initVerify(publicKey);
-
-			byte[] hashedMsg = hashMessage(msg + result.getResult());
-			sig.update(hashedMsg);
-			if (sig.verify(result.getSignature()))
-				return true;
-			else
-				return false;
-
-		} catch (NoSuchAlgorithmException | IOException | InvalidKeySpecException | InvalidKeyException
-				| SignatureException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-		return false;
-	}
-
-	private boolean verifySignature(String toVerify, byte[] signature) {
-		try {
-			KeyFactory keyFactory = KeyFactory.getInstance(ALGORITHM);
-			FileInputStream pubKeyStream = new FileInputStream(NOTARYPUBKEYPATH);
-			int pubKeyLength = pubKeyStream.available();
-			byte[] pubKeyBytes = new byte[pubKeyLength];
-			pubKeyStream.read(pubKeyBytes);
-			pubKeyStream.close();
-			System.out.println(">>>> " + bytesToHex(pubKeyBytes));
-			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
-			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
-
-			Signature sig = Signature.getInstance(SIGNATURE_ALGORITHM);
-			sig.initVerify(publicKey);
-
-			byte[] hashedMsg = hashMessage(toVerify);
-			sig.update(hashedMsg);
-			if (sig.verify(signature))
-				return true;
-			else
-				return false;
-
-		} catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException | SignatureException
-				| InvalidKeyException e) {
-			System.err.println("Exception caught while verifying signature!");
-			e.printStackTrace();
-			return false;
-		}
-
 	}
 
 	public void test() throws Exception {
@@ -210,9 +125,41 @@ public class User implements UserInterface {
 		}
 		return false;
 	}
-
+	
+	// Change to SecureRandom
 	private String generateCNounce() {
 		return new BigInteger(256, random).toString();
+	}
+
+	private boolean verifySignature(String toVerify, byte[] signature) {
+		try {
+			KeyFactory keyFactory = KeyFactory.getInstance(ALGORITHM);
+			FileInputStream pubKeyStream = new FileInputStream(NOTARYPUBKEYPATH);
+			int pubKeyLength = pubKeyStream.available();
+			byte[] pubKeyBytes = new byte[pubKeyLength];
+			pubKeyStream.read(pubKeyBytes);
+			pubKeyStream.close();
+			System.out.println(">>>> " + bytesToHex(pubKeyBytes));
+			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
+			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
+
+			Signature sig = Signature.getInstance(SIGNATURE_ALGORITHM);
+			sig.initVerify(publicKey);
+
+			byte[] hashedMsg = hashMessage(toVerify);
+			sig.update(hashedMsg);
+			if (sig.verify(signature))
+				return true;
+			else
+				return false;
+
+		} catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException | SignatureException
+				| InvalidKeyException e) {
+			System.err.println("Exception caught while verifying signature!");
+			e.printStackTrace();
+			return false;
+		}
+
 	}
 
 	private static String bytesToHex(byte[] hash) {
@@ -251,6 +198,19 @@ public class User implements UserInterface {
 			e.printStackTrace();
 			return null;
 		}
+
+	}
+
+	private void writePublicKeyToFile() throws IOException {
+		File file = new File(publicKeyPath);
+		if (!file.exists()) {
+			file.createNewFile();
+			System.out.println("Creating new file");
+		}
+		FileOutputStream output = new FileOutputStream(publicKeyPath);
+		output.write(publicKey.getEncoded());
+		output.flush();
+		output.close();
 
 	}
 

@@ -9,14 +9,13 @@ public class NotaryServer {
 
 	public static void main(String[] args) {
 		int port = 3000;
-		System.out.println("Main OK");
 
 		try {
 			NotaryImpl obj = NotaryImpl.getInstance();
 
 			Registry reg = LocateRegistry.createRegistry(port);
 			reg.rebind("Notary", obj);
-
+			
 			System.out.println("Server ready!");
 
 			System.out.println("Awaiting connections");

@@ -10,6 +10,7 @@ import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -28,7 +29,7 @@ import java.util.Random;
 
 import pt.ulisboa.tecnico.hdsnotary.library.*;
 
-public class User implements UserInterface {
+public class User extends UnicastRemoteObject implements UserInterface {
 	private static final String SIGNATURE_ALGORITHM = "SHA1withDSA";
 	private static final String ALGORITHM = "DSA";
 	private static final String NOTARYPUBKEYPATH = "../Server/storage/notaryPublicKey.txt";

@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsnotary.client;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
@@ -7,6 +8,7 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.security.NoSuchAlgorithmException;
+import java.util.Scanner;
 
 import pt.ulisboa.tecnico.hdsnotary.library.*;
 
@@ -14,43 +16,96 @@ public class Client {
 	public static void main(String args[]) {
 
 		System.out.println("Initializing Client");
-		
+
 		int PORT = 3000;
-		
-		NotaryInterface notary = null;
 
+		Scanner scanner = new Scanner(System.in);
+		System.out.println("Welcome");
+		int option;
+
+		User user = null;
+        String name = "";
 		try {
-			notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
+            NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
 
-			User u = new User("user1", notary);
-			
-			Registry reg = LocateRegistry.getRegistry(PORT);
-			reg.rebind("Alice", u);
-			
-			u.sell("good2");
-			System.out.println("Transfer > " + u.buyGood("user3", "good2"));
-			
-			u.sell("good1");
-			System.out.println("Transfer > " + u.buyGood("user4", "good1"));
-			
-			u.sell("good3");
-			
-			System.out.println("Server ready!");
+            while (true) {
 
-			System.out.println("Awaiting connections");
-			System.out.println("Press enter to shutdown");
-			System.in.read();
-			System.out.println("Server termindated");
-			System.exit(0);
+                System.out.println("Choose one user to create:");
+                System.out.println("1 - Alice");
+                System.out.println("2 - Bob");
+                System.out.println("3 - Carlos");
 
-		} catch (MalformedURLException | RemoteException | NotBoundException e) {
-			System.out.println("Error locating Notary");
-			e.printStackTrace();
-			return;
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+
+                while(!scanner.hasNextInt())
+                    scanner.next();
+
+                switch (scanner.nextInt()) {
+                    case 1:
+                        user = new User("user1", notary);
+                        name = "Alice";
+                        break;
+                    case 2:
+                        user = new User("user2", notary);
+                        name = "Bob";
+                        break;
+                    case 3:
+                        user = new User("user3", notary);
+                        name = "Carlos";
+                        break;
+                    default:
+                        System.out.println("Invalid option!");
+                }
+
+                if(user!= null) break;
+            }
+
+            Registry reg = LocateRegistry.getRegistry(PORT);
+            reg.rebind(name, user);
+
+//            while(true) {
+//
+//                System.out.println("Choose one option:");
+//                System.out.println("1 - List goods owned");
+//                System.out.println("2 - Sell good");
+//                System.out.println("3 - Buy good");
+//
+//                while(!scanner.hasNextInt())
+//                    scanner.next();
+//
+//                switch (scanner.nextInt()) {
+//                    case 1:
+//                        user.listGoods();
+//                }
+//
+//
+//            }
+
+
+
+
+
+            user.sell("good2");
+            System.out.println("Transfer > " + user.buyGood("user3", "good2"));
+
+            user.sell("good1");
+            System.out.println("Transfer > " + user.buyGood("user4", "good1"));
+
+            user.sell("good3");
+
+            System.out.println("Client server ready!");
+
+            System.out.println("Awaiting connections");
+            System.out.println("Press enter to shutdown");
+            System.in.read();
+            System.out.println("Client server termindated");
+            System.exit(0);
+
+        }
+		catch (NotBoundException | IOException | NoSuchAlgorithmException e) {
+            System.out.println("Error locating Notary");
+            e.printStackTrace();
+            return;
+	    }
 
 	}
 }

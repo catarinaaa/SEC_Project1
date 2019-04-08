@@ -86,7 +86,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 		Result result = notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData);
 
-		System.out.println("> " + data + result.getResult());
+//		System.out.println("> " + data + result.getResult());
 
 		if (verifySignature(data + result.getResult(), result.getSignature()))
 			return result.getResult();
@@ -96,29 +96,29 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		}
 	}
 
-	public void test() throws Exception {
-		byte[] data = "Hey, this was signed".getBytes();
-		Signature dsaForSign = Signature.getInstance("SHA1withDSA");
-		dsaForSign.initSign(privateKey);
-		dsaForSign.update(data);
-		byte[] signature = dsaForSign.sign();
-
-		dsaForSign.initVerify(publicKey);
-		dsaForSign.update(data);
-		System.out.println("> " + dsaForSign.verify(signature));
-
-	}
+//	public void test() throws Exception {
+//		byte[] data = "Hey, this was signed".getBytes();
+//		Signature dsaForSign = Signature.getInstance("SHA1withDSA");
+//		dsaForSign.initSign(privateKey);
+//		dsaForSign.update(data);
+//		byte[] signature = dsaForSign.sign();
+//
+//		dsaForSign.initVerify(publicKey);
+//		dsaForSign.update(data);
+//		System.out.println("> " + dsaForSign.verify(signature));
+//
+//	}
 
 	public boolean sell(String goodId) {
 		try {
 			String nounce = notary.getNounce(this.id);
 			String cnounce = generateCNounce();
 			String str = nounce + cnounce + this.id + goodId;
-			System.out.println(str);
+//			System.out.println(str);
 			byte[] dataDigested = hashMessage(str);
 			byte[] hashSigned = signByteArray(dataDigested);
 
-			System.out.println("Intention > " + notary.intentionToSell(this.id, goodId, cnounce, hashSigned));
+			System.out.println("Intention > " + notary.intentionToSell(this.id, goodId, cnounce, hashSigned).getResult());
 
 		} catch (RemoteException e) {
 			// TODO Auto-generated catch block
@@ -140,7 +140,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			byte[] pubKeyBytes = new byte[pubKeyLength];
 			pubKeyStream.read(pubKeyBytes);
 			pubKeyStream.close();
-			System.out.println(">>>> " + bytesToHex(pubKeyBytes));
+//			System.out.println(">>>> " + bytesToHex(pubKeyBytes));
 			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
 			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
 
@@ -212,6 +212,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		output.write(publicKey.getEncoded());
 		output.flush();
 		output.close();
+
+	}
+
+	public void listGoods() {
 
 	}
 

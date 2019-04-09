@@ -65,10 +65,15 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 		this.id = id;
 		this.notary = notary;
-		this.keysPath = "Client/storage/" + id + ".p12";
-		this.password = id + "1234";
 		this.user2 = user2;
 		this.user3 = user3;
+
+		goods = new HashMap<String, Boolean>();
+		
+		System.out.println("Initializing User");
+
+		this.keysPath = "Client/storage/" + id + ".p12";
+		this.password = id + "1234";
 
 		goods = new HashMap<String, Boolean>();
 
@@ -108,13 +113,14 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 		Result result = notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData);
 
-		System.out.println("> " + data + result.getResult());
+//		System.out.println("> " + data + result.getResult());
 
 		if (verifySignature(data + result.getResult(), result.getSignature())) {
 			System.out.println("Signature verified! Notary confirmed buy good");
 			goods.put(goodId, false);
 			return result.getResult();
-		} else {
+		}
+		else {
 			System.err.println("ERROR: Signature does not verify");
 			return false;
 		}
@@ -128,26 +134,22 @@ public class User extends UnicastRemoteObject implements UserInterface {
 //			System.out.println(str);
 			byte[] hashedData = hashMessage(data);
 			byte[] signedHashedData = signByteArray(hashedData);
-			
-			// System.out.println("Intention > " + notary.intentionToSell(this.id, goodId,
-			// cnounce, hashSigned));
-
+			//System.out.println("Intention > " + notary.intentionToSell(this.id, goodId, cnounce, hashSigned).getResult());
 			Result result = notary.intentionToSell(this.id, goodId, cnounce, signedHashedData);
-
+			
 			if (verifySignature(data + result.getResult(), result.getSignature())) {
 				System.out.println("Signature verified! Notary confirmed intention to sell");
 				goods.replace(goodId, false);
 				return result.getResult();
-			} else {
+			}
+			else {
 				System.out.println("Signature does not verify!");
 				return false;
 			}
-
 		} catch (RemoteException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			return false;
 		}
-		return false;
 	}
 	
 	public boolean stateOfGood(String goodId) {
@@ -207,6 +209,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 	private boolean verifySignature(String toVerify, byte[] signature) {
 		try {
+
 			Signature sig = Signature.getInstance(SIGNATURE_ALGORITHM);
 			sig.initVerify(getStoredCert("Notary"));
 

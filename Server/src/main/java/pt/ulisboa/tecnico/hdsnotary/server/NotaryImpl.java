@@ -148,8 +148,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature)
-			throws RemoteException {
+	public Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
 
 		String toHash = "";
 		try {

@@ -13,6 +13,6 @@ javac -d Client/classes -cp Library/classes Client/src/main/java/pt/ulisboa/tecn
 
 echo "Starting Server..."
 konsole --noclose -e java -Djava.library.path=/usr/local/lib -Dfile.encoding=UTF-8 -classpath Server/classes:Library/classes:Server/lib/pteidlibj.jar pt.ulisboa.tecnico.hdsnotary.server.NotaryServer &
-sleep 3
+sleep 10
 echo "Starting User..."
 java -classpath Library/classes:Client/classes pt.ulisboa.tecnico.hdsnotary.client.Client

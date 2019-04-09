@@ -178,15 +178,26 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public State stateOfGood(String userId, String cnounce, String goodId) throws RemoteException {
-		Good good;
-		if ((good = goodsList.get(goodId)) != null) {
-			boolean status = goodsToSell.contains(goodId);
-			String toSign = nounceList.get(userId) + cnounce + goodId + good.getUserId() + status;
-
-			return new State(good.getUserId(), status, cnounce, signMessage(toSign));
-		} else
-			return null;
+	public Result stateOfGood(String userId, String cnounce, String goodId, byte[] signature) throws RemoteException {
+		String toHash = "";
+		try {
+			toHash = nounceList.get(userId) + cnounce + userId + goodId;
+			System.out.println(toHash);
+			if (!verifySignatureAndHash(toHash, signature, userId))
+				return new Result(false, cnounce, signMessage(toHash + "false"));
+		
+			Good good;
+			if ((good = goodsList.get(goodId)) != null) {
+				boolean status = goodsToSell.contains(goodId);
+	
+				return new Result(good.getUserId(), status, cnounce, signMessage(toHash + "true"));
+			}
+			return new Result(false, cnounce, signMessage(toHash + "false"));
+		} catch (Exception e) {
+			e.printStackTrace();
+			return new Result(false, cnounce, signMessage(toHash + "false"));
+		}
+		
 	}
 
 	@Override
@@ -216,16 +227,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	// ...
-
-	private KeyPair generateKeys() throws NoSuchAlgorithmException {
-		// Gerar par de chave publica e privada
-		KeyPairGenerator keygen = KeyPairGenerator.getInstance("RSA");
-
-		SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
-		keygen.initialize(1024, random);
-		KeyPair pair = keygen.generateKeyPair();
-		return pair;
-	}
 
 	private void recoverSellingList() throws IOException {
 		System.out.println("Recovering selling list");
@@ -309,17 +310,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	}
 
-	private static String bytesToHex(byte[] hash) {
-		StringBuffer hexString = new StringBuffer();
-		for (int i = 0; i < hash.length; i++) {
-			String hex = Integer.toHexString(0xff & hash[i]);
-			if (hex.length() == 1)
-				hexString.append('0');
-			hexString.append(hex);
-		}
-		return hexString.toString();
-	}
-
 	private boolean verifySignatureAndHash(String dataStr, byte[] signature, String userId) {
 		try {	
 			
@@ -386,7 +376,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 	
 	
-
 	private byte[] signMessage(String message) {
 		MessageDigest digest;
 		try {

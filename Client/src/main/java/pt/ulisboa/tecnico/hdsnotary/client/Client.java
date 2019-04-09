@@ -21,7 +21,14 @@ public class Client {
 			User u = new User("Alice", notary);
 
 			u.sell("good2");
+
 			System.out.println("Transfer > " + u.buyGood("Charlie", "good2"));
+
+			
+			u.sell("good1");
+			
+			u.sell("good3");
+
 
 		} catch (MalformedURLException | RemoteException | NotBoundException e) {
 			System.out.println("Error locating Notary");

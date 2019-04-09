@@ -10,6 +10,7 @@ public class Result implements Serializable {
 	private static final long serialVersionUID = 1L;
 	
 	private Boolean result;
+	private Transfer transfer;
 	private String cnounce;
 	private byte[] signature;
 	

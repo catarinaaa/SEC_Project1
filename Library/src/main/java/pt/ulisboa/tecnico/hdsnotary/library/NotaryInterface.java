@@ -11,6 +11,8 @@ public interface NotaryInterface extends Remote {
 	Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException;
 
 	State stateOfGood(String userId, String cnounce, String goodId) throws RemoteException;
+	
+	
 
 	Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature)
 			throws RemoteException;

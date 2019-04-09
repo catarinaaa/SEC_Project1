@@ -41,16 +41,16 @@ public class Client {
 
                 switch (scanner.nextInt()) {
                     case 1:
-                        user = new User("user1", notary);
+                        user = new User("user1", notary, "Bob", "Charlie");
                         name = "Alice";
                         break;
                     case 2:
-                        user = new User("user2", notary);
+                        user = new User("user2", notary, "Alice", "Charlie");
                         name = "Bob";
                         break;
                     case 3:
-                        user = new User("user3", notary);
-                        name = "Carlos";
+                        user = new User("user3", notary, "Alice", "Bob");
+                        name = "Charlie";
                         break;
                     default:
                         System.out.println("Invalid option!");
@@ -84,13 +84,13 @@ public class Client {
 
 
 
-            user.sell("good2");
+            user.intentionSell("good2");
             System.out.println("Transfer > " + user.buyGood("user3", "good2"));
 
-            user.sell("good1");
+            user.intentionSell("good1");
             System.out.println("Transfer > " + user.buyGood("user4", "good1"));
 
-            user.sell("good3");
+            user.intentionSell("good3");
 
             System.out.println("Client server ready!");
 

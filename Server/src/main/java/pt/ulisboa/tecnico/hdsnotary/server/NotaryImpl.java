@@ -259,12 +259,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private void populateList() {
 
-		goodsList.put("good1", new Good("user1", "good1"));
-		goodsList.put("good2", new Good("user1", "good2"));
-		goodsList.put("good3", new Good("user1", "good3"));
-		goodsList.put("good4", new Good("user2", "good4"));
-		goodsList.put("good5", new Good("user3", "good5"));
-		goodsList.put("good6", new Good("user3", "good6"));
+		goodsList.put("good1", new Good("Alice", "good1"));
+		goodsList.put("good2", new Good("Alice", "good2"));
+		goodsList.put("good3", new Good("Alice", "good3"));
+		goodsList.put("good4", new Good("Bob", "good4"));
+		goodsList.put("good5", new Good("Charlie", "good5"));
+		goodsList.put("good6", new Good("Charlie", "good6"));
 
 	}
 

@@ -50,7 +50,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private static final String ALGORITHM = "SHA1withDSA";
 	private static final long serialVersionUID = 1L;
-	private final static String PATH = "storage/database.txt";
+	private final static String PATH = "Server/storage/database.txt";
 
 	// Singleton
 	private static NotaryImpl instance = null;
@@ -85,7 +85,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			file = new File(PATH);
 			if (!file.exists()) {
 				file.createNewFile();
-				System.out.println("Creating new file");
+				System.out.println("Creating new file " + PATH);
 			}
 
 			// generate public/private keys
@@ -109,9 +109,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			recoverTransactions();
 			printGoods();
 			
-			setupCititzenCard();
 
-		} catch (IOException | NoSuchAlgorithmException | InvalidKeyException | CertificateException | PteidException e) {
+		} catch (IOException | NoSuchAlgorithmException | InvalidKeyException e) {
 			e.printStackTrace();
 			System.exit(1);
 		}
@@ -144,7 +143,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		String toHash = "";
 
 		try {
-
 			toHash = nounceList.get(userId) + cnounce + userId + goodId;
 			System.out.println(toHash);
 			if (!verifySignatureAndHash(toHash, signature, userId))
@@ -238,8 +236,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			output.write(sellerId + ";" + buyerId + ";" + goodId + "\n");
 			output.flush();
 		} catch (IOException e) {
-			System.out.println("Error writing to file");
-			e.printStackTrace();
+			System.err.println("ERROR: writing to file failed");
+			System.exit(1);
 		}
 	}
 
@@ -265,8 +263,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			input.close();
 			output.close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.err.println("ERROR: Closing files failed");
+			System.exit(1);
 		}
 
 	}
@@ -284,7 +282,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private boolean verifySignatureAndHash(String dataStr, byte[] signature, String userId) {
 		try {
-			String pubKeyPath = "./storage/pubKey-" + userId + ".txt";
+			String pubKeyPath = "Server/pubKey-" + userId + ".txt";
 			KeyFactory keyFactory = KeyFactory.getInstance("DSA");
 			FileInputStream pubKeyStream = new FileInputStream(pubKeyPath);
 			int pubKeyLength = pubKeyStream.available();
@@ -304,7 +302,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				System.out.println("Hashs are the same and have not been modified");
 				return true;
 			} else {
-				System.out.println("ERROR!");
+				System.err.println("ERROR: signature verification failed");
 				return false;
 			}
 		} catch (NoSuchAlgorithmException e) {
@@ -332,10 +330,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void writePublicKeyToFile() throws IOException {
-		File file = new File("./storage/notaryPublicKey.txt");
+		File file = new File("Server/storage/notaryPublicKey.txt");
 		if (!file.exists()) {
 			file.createNewFile();
-			System.out.println("Creating new file");
+			System.out.println("Creating new file Server/notaryPublicKey.txt");
 		}
 		FileOutputStream output = new FileOutputStream(file);
 		output.write(publicKey.getEncoded());
@@ -352,67 +350,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			signature.update(digested);
 			return signature.sign();
 		} catch (NoSuchAlgorithmException | UnsupportedEncodingException | SignatureException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.err.println("ERROR: Signing message failed");
+			System.exit(1);
 		}
 		return null;
 	}
 
-	private void setupCititzenCard() throws PteidException, CertificateException {
-		System.out.println("            //Load the PTEidlibj");
-		System.out.println(System.getProperty("java.library.path"));
-		System.loadLibrary("pteidlibj");
-		pteid.Init(""); // Initializes the eID Lib
-		pteid.SetSODChecking(false); // Don't check the integrity of the ID, address and photo (!)
-
-		PKCS11 pkcs11;
-		String osName = System.getProperty("os.name");
-		String javaVersion = System.getProperty("java.version");
-		System.out.println("Java version: " + javaVersion);
-
-		java.util.Base64.Encoder encoder = java.util.Base64.getEncoder();
-
-		String libName = "libpteidpkcs11.so";
-
-		// access the ID and Address data via the pteidlib
-		System.out.println("            -- accessing the ID  data via the pteidlib interface");
-
-		X509Certificate cert = getCertFromByteArray(getCertificateInBytes(0));
-		System.out.println("Citized Authentication Certificate " + cert);
-
-	}
-	
-	//Returns the CITIZEN AUTHENTICATION CERTIFICATE
-    public static byte[] getCitizenAuthCertInBytes(){
-        return getCertificateInBytes(0); //certificado 0 no Cartao do Cidadao eh o de autenticacao
-    }
-
-    // Returns the n-th certificate, starting from 0
-    private static  byte[] getCertificateInBytes(int n) {
-        byte[] certificate_bytes = null;
-        try {
-            PTEID_Certif[] certs = pteid.GetCertificates();
-            System.out.println("Number of certs found: " + certs.length);
-            int i = 0;
-	    for (PTEID_Certif cert : certs) {
-                System.out.println("-------------------------------\nCertificate #"+(i++));
-                System.out.println(cert.certifLabel);
-            }
-
-            certificate_bytes = certs[n].certif; //gets the byte[] with the n-th certif
-
-            //pteid.Exit(pteid.PTEID_EXIT_LEAVE_CARD); // OBRIGATORIO Termina a eID Lib
-        } catch (PteidException e) {
-            e.printStackTrace();
-        }
-        return certificate_bytes;
-    }
-
-    public static X509Certificate getCertFromByteArray(byte[] certificateEncoded) throws CertificateException{
-        CertificateFactory f = CertificateFactory.getInstance("X.509");
-        InputStream in = new ByteArrayInputStream(certificateEncoded);
-        X509Certificate cert = (X509Certificate)f.generateCertificate(in);
-        return cert;
-    }
 
 }

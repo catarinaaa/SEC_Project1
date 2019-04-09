@@ -31,7 +31,7 @@ import pt.ulisboa.tecnico.hdsnotary.library.*;
 public class User implements UserInterface {
 	private static final String SIGNATURE_ALGORITHM = "SHA1withDSA";
 	private static final String ALGORITHM = "DSA";
-	private static final String NOTARYPUBKEYPATH = "../Server/storage/notaryPublicKey.txt";
+	private static final String NOTARYPUBKEYPATH = "Server/storage/notaryPublicKey.txt";
 
 	private final String id;
 	// List of all goods possessed
@@ -48,7 +48,7 @@ public class User implements UserInterface {
 		super();
 		this.id = id;
 		this.notary = notary;
-		this.publicKeyPath = "../Server/storage/pubKey-" + id + ".txt";
+		this.publicKeyPath = "Server/storage/pubKey-" + id + ".txt";
 
 		System.out.println("Initializing User");
 
@@ -90,7 +90,7 @@ public class User implements UserInterface {
 		if (verifySignature(data + result.getResult(), result.getSignature()))
 			return result.getResult();
 		else {
-			System.out.println("Signature does not verify!");
+			System.err.println("ERROR: Signature does not verify");
 			return false;
 		}
 	}

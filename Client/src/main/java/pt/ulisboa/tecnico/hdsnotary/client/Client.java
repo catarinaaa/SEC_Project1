@@ -26,6 +26,7 @@ public class Client {
 		User user = null;
         String name = "";
 		try {
+
             NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
 
             while (true) {
@@ -109,6 +110,5 @@ public class Client {
             e.printStackTrace();
             return;
 	    }
-
 	}
 }

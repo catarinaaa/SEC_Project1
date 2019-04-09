@@ -40,6 +40,15 @@
 
 				<configuration>
 					<mainClass>pt.ulisboa.tecnico.hdsnotary.server.NotaryServer</mainClass>
+					<arguments>
+						<argument>-Djava.library.path=/usr/local/lib</argument>
+					</arguments>
+					<systemProperties>
+						<systemProperty>
+							<key>java.library.path</key>
+							<value>/usr/local/lib/</value>
+						</systemProperty>
+					</systemProperties>
 				</configuration>
 
 			</plugin>
@@ -57,6 +66,11 @@
 			<groupId>SEC</groupId>
 			<artifactId>Library</artifactId>
 			<version>1.0-SNAPSHOT</version>
+		</dependency>
+		<dependency>
+			<groupId>pt.gov</groupId>
+			<artifactId>pteidlibj</artifactId>
+			<version>1.0</version>
 		</dependency>
 	</dependencies>
 </project>

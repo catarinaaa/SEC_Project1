@@ -48,6 +48,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private static final String ALGORITHM = "SHA1withRSA";
 	private static final long serialVersionUID = 1L;
 	private final static String PATH = "Server/storage/database.txt";
+	private String id = "Notary";
+	private String keysPath = "Server/storage/Notary.p12";
 
 	// Singleton
 	private static NotaryImpl instance = null;
@@ -70,7 +72,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private BufferedWriter output = null;
 
 	private PrivateKey privateKey = null;
-	private PublicKey publicKey = null;
 
 	private Signature signature;
 
@@ -89,12 +90,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			// !!!!!! IMPLEMENT CARTAO DO CIDADAO !!!!!!
 			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			KeyPair pair = generateKeys();
 
-			privateKey = pair.getPrivate();
-			publicKey = pair.getPublic();
-			writePublicKeyToFile();
-			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			try {
+				this.privateKey = getStoredKey();
+			} catch (KeyStoreException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
 
 			signature = Signature.getInstance(ALGORITHM);
 			signature.initSign(privateKey);
@@ -289,10 +292,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 //			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
 //			
 			
-			PublicKey publicKey = getStoredKey(userId);//keyFactory.generatePublic(pubKeySpec);
+			X509Certificate cert = getStoredCert(userId);//keyFactory.generatePublic(pubKeySpec);
 
 			Signature sig = Signature.getInstance(ALGORITHM);
-			sig.initVerify(publicKey);
+			
+			sig.initVerify(cert);
 
 			MessageDigest digest = MessageDigest.getInstance("SHA-256");
 			byte[] hashed = digest.digest(dataStr.getBytes("UTF-8"));
@@ -322,18 +326,17 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return false;
 	}
 
-	private PublicKey getStoredKey(String userId) throws KeyStoreException {
+	private X509Certificate getStoredCert(String userId) throws KeyStoreException {
 		//Load KeyStore
 	    KeyStore ks = KeyStore.getInstance("pkcs12");
 	    FileInputStream fis = null;
-	    PublicKey publicKey = null;
+	    X509Certificate cert = null;
 	    try {
 	        fis = new FileInputStream(new File("Client/storage/" + userId + ".p12"));
 	        ks.load(fis, (userId + "1234").toCharArray());
 	        
-		    //Load PublicKey
-		    Certificate cert = ks.getCertificate(userId);
-		    publicKey = cert.getPublicKey();
+		    //Load certificate
+		    cert = (X509Certificate) ks.getCertificate(userId);
 		      
 	        if (fis != null) {
 	            fis.close();
@@ -348,22 +351,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	    	System.err.println("ERROR: Wrong algorithm in KeyStore");
 	    	System.exit(1);	    	
 	    }
-	    return publicKey;
+	    return cert;
 	}
 	
 	
-	private void writePublicKeyToFile() throws IOException {
-		File file = new File("Server/storage/notaryPublicKey.txt");
-		if (!file.exists()) {
-			file.createNewFile();
-			System.out.println("Creating new file Server/notaryPublicKey.txt");
-		}
-		FileOutputStream output = new FileOutputStream(file);
-		output.write(publicKey.getEncoded());
-		output.flush();
-		output.close();
-
-	}
 
 	private byte[] signMessage(String message) {
 		MessageDigest digest;
@@ -379,5 +370,34 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return null;
 	}
 
+	private PrivateKey getStoredKey() throws KeyStoreException {
+		//Load KeyStore
+	    KeyStore ks = KeyStore.getInstance("pkcs12");
+	    KeyStore.ProtectionParameter protParam = new KeyStore.PasswordProtection(id.toCharArray());
+	    FileInputStream fis = null;
+	    PrivateKey priKey= null;
+	    try {
+	        fis = new FileInputStream(new File(keysPath));
+	        ks.load(fis, id.toCharArray());
+	        
+		    //Load PrivateKey
+		    PrivateKeyEntry pkEntry = (PrivateKeyEntry) ks.getEntry(this.id, protParam);
+		    priKey = pkEntry.getPrivateKey();
+		      
+	        if (fis != null) {
+	            fis.close();
+	        } 
+	    } catch (FileNotFoundException | CertificateException e) {
+	    	System.err.println("ERROR: KeyStore/certificate of user" + id + " not found");
+	    	System.exit(1);
+	    } catch(UnrecoverableEntryException | IOException e) {
+	    	System.err.println("ERROR: Wrong password of KeyStore");
+	    	System.exit(1);
+	    } catch(NoSuchAlgorithmException e) {
+	    	System.err.println("ERROR: Wrong algorithm in KeyStore");
+	    	System.exit(1);	    	
+	    }
+	    return priKey;
+	}
 
 }

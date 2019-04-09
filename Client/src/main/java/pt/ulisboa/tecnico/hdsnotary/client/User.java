@@ -29,6 +29,7 @@ import java.security.SignatureException;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
@@ -137,18 +138,8 @@ public class User implements UserInterface {
 
 	private boolean verifySignature(String toVerify, byte[] signature) {
 		try {
-			KeyFactory keyFactory = KeyFactory.getInstance(ALGORITHM);
-			FileInputStream pubKeyStream = new FileInputStream(NOTARYPUBKEYPATH);
-			int pubKeyLength = pubKeyStream.available();
-			byte[] pubKeyBytes = new byte[pubKeyLength];
-			pubKeyStream.read(pubKeyBytes);
-			pubKeyStream.close();
-			System.out.println(">>>> " + bytesToHex(pubKeyBytes));
-			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
-			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
-
 			Signature sig = Signature.getInstance(SIGNATURE_ALGORITHM);
-			sig.initVerify(publicKey);
+			sig.initVerify(getStoredCert("Notary"));
 
 			byte[] hashedMsg = hashMessage(toVerify);
 			sig.update(hashedMsg);
@@ -157,8 +148,8 @@ public class User implements UserInterface {
 			else
 				return false;
 
-		} catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException | SignatureException
-				| InvalidKeyException e) {
+		} catch (NoSuchAlgorithmException | SignatureException
+				| InvalidKeyException | KeyStoreException e) {
 			System.err.println("Exception caught while verifying signature!");
 			e.printStackTrace();
 			return false;
@@ -235,5 +226,33 @@ public class User implements UserInterface {
 	    return priKey;
 	}
 	
+	// Gets notary certificate
+	private X509Certificate getStoredCert(String NotaryId) throws KeyStoreException {
+		//Load KeyStore
+	    KeyStore ks = KeyStore.getInstance("pkcs12");
+	    FileInputStream fis = null;
+	    X509Certificate cert = null;
+	    try {
+	        fis = new FileInputStream(new File("Server/storage/Notary.p12"));
+	        ks.load(fis, NotaryId.toCharArray());
+	        
+		    //Load certificate
+		    cert = (X509Certificate) ks.getCertificate(NotaryId);
+		      
+	        if (fis != null) {
+	            fis.close();
+	        } 
+	    } catch (FileNotFoundException | CertificateException e) {
+	    	System.err.println("ERROR: KeyStore/certificate of " + NotaryId + " not found");
+	    	System.exit(1);
+	    } catch(IOException e) {
+	    	System.err.println("ERROR: Wrong password of KeyStore");
+	    	System.exit(1);
+	    } catch(NoSuchAlgorithmException e) {
+	    	System.err.println("ERROR: Wrong algorithm in KeyStore");
+	    	System.exit(1);	    	
+	    }
+	    return cert;
+	}
 	
 }

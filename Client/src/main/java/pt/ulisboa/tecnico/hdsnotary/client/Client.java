@@ -91,6 +91,9 @@ public class Client {
             System.out.println("Transfer > " + user.buyGood("user4", "good1"));
 
             user.intentionSell("good3");
+            
+            System.out.println("Testing state of good");
+            user.stateOfGood("good2");
 
             System.out.println("Client server ready!");
 

@@ -157,9 +157,30 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		return false;
 	}
 	
-	public State stateOfGood(String goodId) {
-		//TODO
+	public boolean stateOfGood(String goodId) {
+		try {
+			String cnounce = generateCNounce();
+			String data = notary.getNounce(this.id) + cnounce + this.id + goodId;
+			byte[] hashedData = hashMessage(data);
+			byte[] signedHashedData = signByteArray(hashedData);
+	
+			Result result = notary.stateOfGood(this.getId(), cnounce, goodId, signedHashedData);
+	
+	//		System.out.println("> " + data + result.getResult());
+	
+			if (verifySignature(data + result.getResult(), result.getSignature())) {
+				System.out.println("Signature verified! Notary confirmed state of good");
+				return result.getResult();
+			}
+			else {
+				System.out.println("Signature does not verify!");
+				return false;
+			}
+		} catch(RemoteException e) {
+			e.printStackTrace();
+		}
 		
+		return false;
 	}
 	
 	// Change to SecureRandom

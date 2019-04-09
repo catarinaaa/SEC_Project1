@@ -148,8 +148,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature)
-			throws RemoteException {
+	public Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
 
 		String toHash = "";
 		try {
@@ -178,15 +177,26 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public State stateOfGood(String userId, String cnounce, String goodId) throws RemoteException {
-		Good good;
-		if ((good = goodsList.get(goodId)) != null) {
-			boolean status = goodsToSell.contains(goodId);
-			String toSign = nounceList.get(userId) + cnounce + goodId + good.getUserId() + status;
-
-			return new State(good.getUserId(), status, cnounce, signMessage(toSign));
-		} else
-			return null;
+	public Result stateOfGood(String userId, String cnounce, String goodId, byte[] signature) throws RemoteException {
+		String toHash = "";
+		try {
+			toHash = nounceList.get(userId) + cnounce + userId + goodId;
+			System.out.println(toHash);
+			if (!verifySignatureAndHash(toHash, signature, userId))
+				return new Result(false, cnounce, signMessage(toHash + "false"));
+		
+			Good good;
+			if ((good = goodsList.get(goodId)) != null) {
+				boolean status = goodsToSell.contains(goodId);
+	
+				return new Result(good.getUserId(), status, cnounce, signMessage(toHash + "true"));
+			}
+			return new Result(false, cnounce, signMessage(toHash + "false"));
+		} catch (Exception e) {
+			e.printStackTrace();
+			return new Result(false, cnounce, signMessage(toHash + "false"));
+		}
+		
 	}
 
 	@Override

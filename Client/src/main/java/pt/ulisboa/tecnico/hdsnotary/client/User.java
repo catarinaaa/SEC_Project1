@@ -11,6 +11,7 @@ import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -33,6 +34,8 @@ import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 import pt.ulisboa.tecnico.hdsnotary.library.*;
@@ -43,8 +46,10 @@ public class User implements UserInterface {
 	private static final String NOTARYPUBKEYPATH = "Server/storage/notaryPublicKey.txt";
 
 	private final String id;
+	private final String user2;
+	private final String user3;
 	// List of all goods possessed
-	private ArrayList<Good> goods;
+	private Map<String, Boolean> goods;
 	// Instance of remote Notary Object
 	private NotaryInterface notary = null;
 	
@@ -54,11 +59,21 @@ public class User implements UserInterface {
 	PrivateKey privateKey;
 	PublicKey publicKey;
 
-	public User(String id, NotaryInterface notary) {
+	public User(String id, NotaryInterface notary, String user2, String user3) throws IOException, NoSuchAlgorithmException {
+
 		super();
 		
 		this.id = id;
 		this.notary = notary;
+
+		this.publicKeyPath = "../Server/storage/pubKey-" + id + ".txt";
+		this.user2 = user2;
+		this.user3 = user3;
+
+		goods = new HashMap<String, Boolean>();
+		
+		System.out.println("Initializing User");
+
 		this.keysPath = "Client/storage/" + id + ".p12";
 		this.password = id + "1234";
 		
@@ -72,11 +87,19 @@ public class User implements UserInterface {
 		
 	}
 
+	public String getUser2() {
+		return user2;
+	}
+
+	public String getUser3() {
+		return user3;
+	}
+
 	public String getId() {
 		return id;
 	}
 
-	public ArrayList<Good> getGoods() {
+	public Map<String, Boolean> getGoods() {
 		return goods;
 	}
 
@@ -90,44 +113,84 @@ public class User implements UserInterface {
 
 		Result result = notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData);
 
-		System.out.println("> " + data + result.getResult());
+//		System.out.println("> " + data + result.getResult());
 
-		if (verifySignature(data + result.getResult(), result.getSignature()))
+		if (verifySignature(data + result.getResult(), result.getSignature())) {
+			System.out.println("Signature verified! Notary confirmed buy good");
+			goods.put(goodId, false);
 			return result.getResult();
+		}
 		else {
 			System.err.println("ERROR: Signature does not verify");
 			return false;
 		}
 	}
 
-	public void test() throws Exception {
-		byte[] data = "Hey, this was signed".getBytes();
-		Signature dsaForSign = Signature.getInstance("SHA1withDSA");
-		dsaForSign.initSign(privateKey);
-		dsaForSign.update(data);
-		byte[] signature = dsaForSign.sign();
+/*	//public void test() throws Exception {
+//		byte[] data = "Hey, this was signed".getBytes();
+//		Signature dsaForSign = Signature.getInstance("SHA1withDSA");
+//		dsaForSign.initSign(privateKey);
+//		dsaForSign.update(data);
+//		byte[] signature = dsaForSign.sign();
+//
+//		dsaForSign.initVerify(publicKey);
+//		dsaForSign.update(data);
+//		System.out.println("> " + dsaForSign.verify(signature));
+//
+//	}
+ */
 
-		dsaForSign.initVerify(publicKey);
-		dsaForSign.update(data);
-		System.out.println("> " + dsaForSign.verify(signature));
-
-	}
-
-	public boolean sell(String goodId) {
+	public boolean intentionSell(String goodId) {
 		try {
 			String nounce = notary.getNounce(this.id);
 			String cnounce = generateCNounce();
-			String str = nounce + cnounce + this.id + goodId;
-			System.out.println(str);
-			byte[] dataDigested = hashMessage(str);
-			byte[] hashSigned = signByteArray(dataDigested);
+			String data = nounce + cnounce + this.id + goodId;
+//			System.out.println(str);
+			byte[] hashedData = hashMessage(data);
+			byte[] signedHashedData = signByteArray(hashedData);
 
-			System.out.println("Intention > " + notary.intentionToSell(this.id, goodId, cnounce, hashSigned));
-
+			//System.out.println("Intention > " + notary.intentionToSell(this.id, goodId, cnounce, hashSigned).getResult());
+			Result result = notary.intentionToSell(this.id, goodId, cnounce, signedHashedData);
+			
+			if (verifySignature(data + result.getResult(), result.getSignature())) {
+				System.out.println("Signature verified! Notary confirmed intention to sell");
+				goods.replace(goodId, false);
+				return result.getResult();
+			}
+			else {
+				System.out.println("Signature does not verify!");
+				return false;
+			}
 		} catch (RemoteException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		return false;
+	}
+	
+	public boolean stateOfGood(String goodId) {
+		try {
+			String cnounce = generateCNounce();
+			String data = notary.getNounce(this.id) + cnounce + this.id + goodId;
+			byte[] hashedData = hashMessage(data);
+			byte[] signedHashedData = signByteArray(hashedData);
+	
+			Result result = notary.stateOfGood(this.getId(), cnounce, goodId, signedHashedData);
+	
+	//		System.out.println("> " + data + result.getResult());
+	
+			if (verifySignature(data + result.getResult(), result.getSignature())) {
+				System.out.println("Signature verified! Notary confirmed state of good");
+				return result.getResult();
+			}
+			else {
+				System.out.println("Signature does not verify!");
+				return false;
+			}
+		} catch(RemoteException e) {
+			e.printStackTrace();
+		}
+		
 		return false;
 	}
 	
@@ -138,6 +201,7 @@ public class User implements UserInterface {
 
 	private boolean verifySignature(String toVerify, byte[] signature) {
 		try {
+
 			Signature sig = Signature.getInstance(SIGNATURE_ALGORITHM);
 			sig.initVerify(getStoredCert("Notary"));
 
@@ -225,7 +289,31 @@ public class User implements UserInterface {
 	    }
 	    return priKey;
 	}
-	
+
+	public void listGoods() {
+		for (String goodId: goods.keySet()){
+			Boolean value = goods.get(goodId);
+            System.out.println(goodId + "-->" + value);
+		} 
+	}
+
+	private void lookUpUsers() {
+		try {
+			UserInterface user2 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser2());
+			UserInterface user3 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser3());
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (RemoteException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (NotBoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+	}
+
 	// Gets notary certificate
 	private X509Certificate getStoredCert(String NotaryId) throws KeyStoreException {
 		//Load KeyStore
@@ -254,5 +342,5 @@ public class User implements UserInterface {
 	    }
 	    return cert;
 	}
-	
+
 }

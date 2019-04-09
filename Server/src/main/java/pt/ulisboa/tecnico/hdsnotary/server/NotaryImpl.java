@@ -20,6 +20,8 @@ import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
@@ -27,6 +29,9 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.security.UnrecoverableEntryException;
+import java.security.KeyStore.PrivateKeyEntry;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -36,19 +41,11 @@ import java.util.ArrayList;
 import java.util.Random;
 import java.util.TreeMap;
 import pt.ulisboa.tecnico.hdsnotary.library.*;
-import pteidlib.PTEID_Certif;
-import pteidlib.PteidException;
-import pteidlib.pteid;
-import sun.security.pkcs11.wrapper.CK_ATTRIBUTE;
-import sun.security.pkcs11.wrapper.CK_C_INITIALIZE_ARGS;
-import sun.security.pkcs11.wrapper.CK_MECHANISM;
-import sun.security.pkcs11.wrapper.CK_SESSION_INFO;
-import sun.security.pkcs11.wrapper.PKCS11;
-import sun.security.pkcs11.wrapper.PKCS11Constants;
+
 
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
 
-	private static final String ALGORITHM = "SHA1withDSA";
+	private static final String ALGORITHM = "SHA1withRSA";
 	private static final long serialVersionUID = 1L;
 	private final static String PATH = "Server/storage/database.txt";
 
@@ -208,7 +205,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private KeyPair generateKeys() throws NoSuchAlgorithmException {
 		// Gerar par de chave publica e privada
-		KeyPairGenerator keygen = KeyPairGenerator.getInstance("DSA");
+		KeyPairGenerator keygen = KeyPairGenerator.getInstance("RSA");
 
 		SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
 		keygen.initialize(1024, random);
@@ -243,12 +240,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private void populateList() {
 
-		goodsList.put("good1", new Good("user1", "good1"));
-		goodsList.put("good2", new Good("user1", "good2"));
-		goodsList.put("good3", new Good("user1", "good3"));
-		goodsList.put("good4", new Good("user2", "good4"));
-		goodsList.put("good5", new Good("user3", "good5"));
-		goodsList.put("good6", new Good("user3", "good6"));
+		goodsList.put("good1", new Good("Alice", "good1"));
+		goodsList.put("good2", new Good("Alice", "good2"));
+		goodsList.put("good3", new Good("Alice", "good3"));
+		goodsList.put("good4", new Good("Bob", "good4"));
+		goodsList.put("good5", new Good("Charlie", "good5"));
+		goodsList.put("good6", new Good("Charlie", "good6"));
 
 	}
 
@@ -282,15 +279,17 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private boolean verifySignatureAndHash(String dataStr, byte[] signature, String userId) {
 		try {
-			String pubKeyPath = "Server/pubKey-" + userId + ".txt";
-			KeyFactory keyFactory = KeyFactory.getInstance("DSA");
-			FileInputStream pubKeyStream = new FileInputStream(pubKeyPath);
-			int pubKeyLength = pubKeyStream.available();
-			byte[] pubKeyBytes = new byte[pubKeyLength];
-			pubKeyStream.read(pubKeyBytes);
-			pubKeyStream.close();
-			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
-			PublicKey publicKey = keyFactory.generatePublic(pubKeySpec);
+//			String pubKeyPath = "Server/pubKey-" + userId + ".txt";
+//			KeyFactory keyFactory = KeyFactory.getInstance("DSA");
+//			FileInputStream pubKeyStream = new FileInputStream(pubKeyPath);
+//			int pubKeyLength = pubKeyStream.available();
+//			byte[] pubKeyBytes = new byte[pubKeyLength];
+//			pubKeyStream.read(pubKeyBytes);
+//			pubKeyStream.close();
+//			X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(pubKeyBytes);
+//			
+			
+			PublicKey publicKey = getStoredKey(userId);//keyFactory.generatePublic(pubKeySpec);
 
 			Signature sig = Signature.getInstance(ALGORITHM);
 			sig.initVerify(publicKey);
@@ -316,19 +315,43 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		} catch (InvalidKeyException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		} catch (FileNotFoundException e) {
+		} catch (KeyStoreException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (InvalidKeySpecException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		} 
 		return false;
 	}
 
+	private PublicKey getStoredKey(String userId) throws KeyStoreException {
+		//Load KeyStore
+	    KeyStore ks = KeyStore.getInstance("pkcs12");
+	    FileInputStream fis = null;
+	    PublicKey publicKey = null;
+	    try {
+	        fis = new FileInputStream(new File("Client/storage/" + userId + ".p12"));
+	        ks.load(fis, (userId + "1234").toCharArray());
+	        
+		    //Load PublicKey
+		    Certificate cert = ks.getCertificate(userId);
+		    publicKey = cert.getPublicKey();
+		      
+	        if (fis != null) {
+	            fis.close();
+	        } 
+	    } catch (FileNotFoundException | CertificateException e) {
+	    	System.err.println("ERROR: KeyStore/certificate of user" + userId + " not found");
+	    	System.exit(1);
+	    } catch(IOException e) {
+	    	System.err.println("ERROR: Wrong password of KeyStore");
+	    	System.exit(1);
+	    } catch(NoSuchAlgorithmException e) {
+	    	System.err.println("ERROR: Wrong algorithm in KeyStore");
+	    	System.exit(1);	    	
+	    }
+	    return publicKey;
+	}
+	
+	
 	private void writePublicKeyToFile() throws IOException {
 		File file = new File("Server/storage/notaryPublicKey.txt");
 		if (!file.exists()) {

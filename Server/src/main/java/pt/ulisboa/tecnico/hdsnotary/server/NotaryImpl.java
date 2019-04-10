@@ -89,7 +89,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private BufferedWriter outputTransactions= null;
 	private BufferedReader inputSellings = null;
 	private BufferedWriter outputSellings= null;
-
+	private int transferId = 1;
 	private PrivateKey privateKey = null;
 
 	private Signature signature;
@@ -236,7 +236,16 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				saveTransfer(sellerId, buyerId, goodId);
 				printGoods();
 				System.out.println(msg + "true");
-				return new Result(true, cnounce, signMessage(msg + "true"));
+				
+				try {
+					Transfer transfer = new Transfer(transferId++, buyerId, sellerId, goodId, signWithCC(transferId+buyerId+sellerId+goodId));
+					return new Result(true, transfer, cnounce, signMessage(msg + "true"));
+				} catch (UnsupportedEncodingException | PKCS11Exception e) {
+					System.err.println("ERROR: Signing with CC not possible!");
+					return new Result(false, cnounce, signMessage(msg + "false"));
+				}
+				
+				
 			}
 		}
 		printGoods();
@@ -244,6 +253,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	// ...
+
+	private byte[] signWithCC(String string) throws UnsupportedEncodingException, PKCS11Exception {
+		return pkcs11.C_Sign(p11_session, string.getBytes("UTF-8"));
+	}
 
 	private void recoverSellingList() throws IOException {
 		System.out.println("Recovering selling list");

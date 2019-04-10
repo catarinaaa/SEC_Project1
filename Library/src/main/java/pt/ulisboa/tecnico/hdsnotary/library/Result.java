@@ -21,6 +21,16 @@ public class Result implements Serializable {
 		this.result = result;
 		this.cnounce = cnounce;
 		this.signature = signature;
+		this.transfer = null;
+	}
+	
+	public Result(Boolean result, Transfer transfer, String cnounce, byte[] signature) {
+		super();
+		this.userId = null;
+		this.result = result;
+		this.cnounce = cnounce;
+		this.signature = signature;
+		this.transfer = transfer;
 	}
 
 	public Result(String userId, Boolean result, String cnounce, byte[] signature) {

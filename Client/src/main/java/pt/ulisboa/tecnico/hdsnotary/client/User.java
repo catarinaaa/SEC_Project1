@@ -96,6 +96,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	public Map<String, Boolean> getGoods() {
 		return goods;
 	}
+	
+	public void addGood(String goodId, boolean bool) {
+		goods.put(goodId, bool);
+		//TODO adicionar à lista do notario
+		
+	}
 
 	@Override
 	public Boolean buyGood(String userId, String goodId) throws RemoteException {

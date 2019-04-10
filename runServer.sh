@@ -10,4 +10,4 @@ javac -d Library/classes Library/src/main/java/pt/ulisboa/tecnico/hdsnotary/libr
 javac -d Server/classes -cp Library/classes:Server/lib/pteidlibj.jar Server/src/main/java/pt/ulisboa/tecnico/hdsnotary/server/*.java
 
 echo "Starting Server..."
-java -Djava.library.path=/usr/local/lib -Dfile.encoding=UTF-8 -classpath Server/classes:Library/classes:Server/lib/pteidlibj.jar pt.ulisboa.tecnico.hdsnotary.server.NotaryServer &
+java -Djava.library.path=/usr/local/lib -Dfile.encoding=UTF-8 -classpath Server/classes:Library/classes:Server/lib/pteidlibj.jar pt.ulisboa.tecnico.hdsnotary.server.NotaryServer

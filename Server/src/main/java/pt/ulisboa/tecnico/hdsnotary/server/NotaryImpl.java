@@ -300,7 +300,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void populateList() {
-
+		//TODO -> ISTO VAI SAIR DAQUI, ADICIONAR À LISTA QUANDO USER ADICIONA GOOD
 		goodsList.put("good1", new Good("Alice", "good1"));
 		goodsList.put("good2", new Good("Alice", "good2"));
 		goodsList.put("good3", new Good("Alice", "good3"));

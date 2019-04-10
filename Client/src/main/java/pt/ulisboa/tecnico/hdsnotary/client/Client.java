@@ -44,16 +44,20 @@ public class Client {
                     case 1:
                         user = new User("Alice", notary, "Bob", "Charlie");
                         name = "Alice";
-                        user.addGood(name+" 1", false);
-                        user.addGood(name+" 2", false);
+                        user.addGood(name+"1", false);
+                        user.addGood(name+"2", false);
                         break;
                     case 2:
                         user = new User("Bob", notary, "Alice", "Charlie");
                         name = "Bob";
+                        user.addGood(name+"1", false);
+                        user.addGood(name+"2", false);
                         break;
                     case 3:
                         user = new User("Charlie", notary, "Alice", "Bob");
                         name = "Charlie";
+                        user.addGood(name+"1", false);
+                        user.addGood(name+"2", false);
                         break;
                     default:
                         System.out.println("Invalid option!");

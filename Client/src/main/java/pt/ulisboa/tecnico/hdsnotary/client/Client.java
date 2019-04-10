@@ -44,6 +44,8 @@ public class Client {
                     case 1:
                         user = new User("Alice", notary, "Bob", "Charlie");
                         name = "Alice";
+                        user.addGood(name+" 1", false);
+                        user.addGood(name+" 2", false);
                         break;
                     case 2:
                         user = new User("Bob", notary, "Alice", "Charlie");
@@ -97,7 +99,7 @@ public class Client {
                     	break;
                     case 5:
                     	System.out.println("Goodbye!");
-                    	return;
+                    	System.exit(0);
                     default:
                     	System.out.println("Invalid option!");
                 }

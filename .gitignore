@@ -31,6 +31,12 @@ hs_err_pid*
 
 # Maven
 target/
+log/
+
+# Intellij
+.idea/
+*.iml
+*.iws
 
 # Eclipse files
 .project

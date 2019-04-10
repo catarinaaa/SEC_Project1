@@ -63,46 +63,68 @@ public class Client {
             Registry reg = LocateRegistry.getRegistry(PORT);
             reg.rebind(name, user);
 
-//            while(true) {
+            while(true) {
+
+                System.out.println("Choose one option:");
+                System.out.println("1 - List goods owned");
+                System.out.println("2 - Sell good");
+                System.out.println("3 - Buy good");
+                System.out.println("4 - Check state of Good");
+                System.out.println("5 - Logout");
+
+                while(!scanner.hasNextInt())
+                    scanner.next();
+
+                switch (scanner.nextInt()) {
+                    case 1:
+                    	System.out.println("Printing list of goods owned by " + name);
+                        user.listGoods();
+                        break;
+                    case 2:
+                    	System.out.println("Input good ID of good you wish to sell");
+                    	String goodId = scanner.next();
+                    	user.intentionSell(goodId);
+                    	break;
+                    case 3:
+                    	System.out.println("Input good ID of good you wish to buy");
+                    	goodId = scanner.next();
+                    	user.buying(goodId);
+                    	break;
+                    case 4:
+                    	System.out.println("Input good ID of good you wish to check state");
+                    	goodId = scanner.next();
+                    	user.stateOfGood(goodId);
+                    	break;
+                    case 5:
+                    	System.out.println("Goodbye!");
+                    	return;
+                    default:
+                    	System.out.println("Invalid option!");
+                }
+            }
+
+
+
+
+
+//            user.intentionSell("good2");
+//            System.out.println("Transfer > " + user.buyGood("user3", "good2"));
 //
-//                System.out.println("Choose one option:");
-//                System.out.println("1 - List goods owned");
-//                System.out.println("2 - Sell good");
-//                System.out.println("3 - Buy good");
+//            user.intentionSell("good1");
+//            System.out.println("Transfer > " + user.buyGood("user4", "good1"));
 //
-//                while(!scanner.hasNextInt())
-//                    scanner.next();
+//            user.intentionSell("good3");
+//            
+//            System.out.println("Testing state of good");
+//            user.stateOfGood("good2");
 //
-//                switch (scanner.nextInt()) {
-//                    case 1:
-//                        user.listGoods();
-//                }
+//            System.out.println("Client server ready!");
 //
-//
-//            }
-
-
-
-
-
-            user.intentionSell("good2");
-            System.out.println("Transfer > " + user.buyGood("user3", "good2"));
-
-            user.intentionSell("good1");
-            System.out.println("Transfer > " + user.buyGood("user4", "good1"));
-
-            user.intentionSell("good3");
-            
-            System.out.println("Testing state of good");
-            user.stateOfGood("good2");
-
-            System.out.println("Client server ready!");
-
-            System.out.println("Awaiting connections");
-            System.out.println("Press enter to shutdown");
-            System.in.read();
-            System.out.println("Client server termindated");
-            System.exit(0);
+//            System.out.println("Awaiting connections");
+//            System.out.println("Press enter to shutdown");
+//            System.in.read();
+//            System.out.println("Client server termindated");
+//            System.exit(0);
 
         }
 		catch (NotBoundException | IOException e) {

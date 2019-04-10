@@ -3,7 +3,6 @@ package pt.ulisboa.tecnico.hdsnotary.client;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
@@ -13,12 +12,8 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.InvalidKeyException;
-import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStore.PrivateKeyEntry;
-import java.security.KeyStore.SecretKeyEntry;
 import java.security.KeyStoreException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -33,10 +28,9 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.ArrayList;
+import java.util.ArrayList; 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Random;
 
 import pt.ulisboa.tecnico.hdsnotary.library.*;
 
@@ -55,7 +49,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	// Instance of remote Notary Object
 	private NotaryInterface notary = null;
 
-	private Random random = new Random();
+	private SecureRandom secRandom = new SecureRandom();
 	private String keysPath; // KeyStore location
 	private String password; // KeyStore password
 	PrivateKey privateKey;
@@ -125,6 +119,19 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			return false;
 		}
 	}
+	
+	public boolean buying(String goodId) throws RemoteException {
+		Result stateOfGood = stateOfGood(goodId);
+		if (false == stateOfGood.getResult()) {
+			System.out.println("Good is not up for sale");
+			return false;
+		}
+		else {
+			String seller = stateOfGood.getUserId();
+			buyGood(seller, goodId);
+			return true;
+		}
+	}
 
 	public boolean intentionSell(String goodId) {
 		try {
@@ -152,7 +159,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		}
 	}
 	
-	public boolean stateOfGood(String goodId) {
+	public Result stateOfGood(String goodId) {
 		try {
 			String cnounce = generateCNounce();
 			String data = notary.getNounce(this.id) + cnounce + this.id + goodId;
@@ -165,17 +172,17 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	
 			if (verifySignature(data + result.getResult(), result.getSignature())) {
 				System.out.println("Signature verified! Notary confirmed state of good");
-				return result.getResult();
+				return result;
 			}
 			else {
 				System.out.println("Signature does not verify!");
-				return false;
+				return result;
 			}
 		} catch(RemoteException e) {
 			e.printStackTrace();
 		}
 		
-		return false;
+		return null;
 	}
 	
 	public void listGoods() {
@@ -202,9 +209,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		
 	}
 
-	// Change to SecureRandom
 	private String generateCNounce() {
-		return new BigInteger(256, random).toString();
+		return new BigInteger(256, secRandom).toString();
 	}
 
 	private boolean verifySignature(String toVerify, byte[] signature) {

@@ -30,17 +30,17 @@ public class Client {
             NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
 
             while (true) {
-
-                System.out.println("Choose one user to create:");
-                System.out.println("1 - Alice");
-                System.out.println("2 - Bob");
-                System.out.println("3 - Carlos");
-
+            	if(args.length ==0) {
+	                System.out.println("Choose one user to create:");
+	                System.out.println("1 - Alice");
+	                System.out.println("2 - Bob");
+	                System.out.println("3 - Carlos");
+            	
 
                 while(!scanner.hasNextInt())
                     scanner.next();
-
-                switch (scanner.nextInt()) {
+            	}
+                switch ((args.length > 0) ? Integer.parseInt(args[0]) : scanner.nextInt()) {
                     case 1:
                         user = new User("Alice", notary, "Bob", "Charlie");
                         name = "Alice";
@@ -58,11 +58,11 @@ public class Client {
                 }
 
                 if(user!= null) break;
+	            
+	
+	            Registry reg = LocateRegistry.getRegistry(PORT);
+	            reg.rebind(name, user);
             }
-
-            Registry reg = LocateRegistry.getRegistry(PORT);
-            reg.rebind(name, user);
-
             while(true) {
 
                 System.out.println("Choose one option:");
@@ -123,11 +123,11 @@ public class Client {
 //            System.out.println("Awaiting connections");
 //            System.out.println("Press enter to shutdown");
 //            System.in.read();
-//            System.out.println("Client server termindated");
+//            System.out.println("Client server terminated");
 //            System.exit(0);
 
-        }
-		catch (NotBoundException | IOException e) {
+        
+		} catch (NotBoundException | IOException e) {
             System.out.println("Error locating Notary");
             e.printStackTrace();
             return;

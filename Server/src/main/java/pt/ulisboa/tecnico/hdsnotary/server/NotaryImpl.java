@@ -48,6 +48,7 @@ import sun.security.pkcs11.wrapper.CK_SESSION_INFO;
 import sun.security.pkcs11.wrapper.PKCS11;
 import sun.security.pkcs11.wrapper.PKCS11Constants;
 import sun.security.pkcs11.wrapper.PKCS11Exception;
+import pt.gov.cartaodecidadao.PTEID_ID;
 import pt.gov.cartaodecidadao.PteidException;
 import pt.ulisboa.tecnico.hdsnotary.library.*;
 import pteidlib.PTEID_Certif;
@@ -140,7 +141,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			
 
 		} catch (IOException | NoSuchAlgorithmException | InvalidKeyException | CertificateException | PteidException | pteidlib.PteidException e) {
-			e.printStackTrace();
+			System.err.println("ERROR: creation of Notary failed");
 			System.exit(1);
 		}
 	}
@@ -167,28 +168,29 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	@Override
 	public Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
-
+		System.out.println("------ INTENTION TO SELL ------\n" + "User: " + userId + "\tGood: " + goodId);
+		
 		String toHash = "";
 		try {
-			toHash = nounceList.get(userId) + cnounce + userId + goodId;
-			System.out.println(toHash);
-			if (!verifySignatureAndHash(toHash, signature, userId))
-				return new Result(false, cnounce, signMessage(toHash + "false"));
 			
 			Good good;
-
-			if ((good = goodsList.get(goodId)) != null) {
-				if (good.getUserId().equals(userId) && !goodsToSell.contains(good.getGoodId())) {
-					goodsToSell.add(good.getGoodId());
-					sellingListUpdate(userId, good.getGoodId());
-					return new Result(true, cnounce, signMessage(toHash + "true"));
-				}
-			}
-
+			toHash = nounceList.get(userId) + cnounce + userId + goodId;
+			
+			//verifies good exists, user owns good, good is not already for sale and signature is valid
+			if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(userId) 
+					&& !goodsToSell.contains(good.getGoodId()) && verifySignatureAndHash(toHash, signature, userId)) {
+				goodsToSell.add(good.getGoodId());
+				sellingListUpdate(userId, good.getGoodId());
+				System.out.println("Result: YES\n");
+				return new Result(true, cnounce, signMessage(toHash + "true"));
+			} 
+			
+			System.out.println("Result: NO\n");
 			return new Result(false, cnounce, signMessage(toHash + "false"));
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			System.err.println("ERROR: Exception caught");
+			System.out.println("Result: NO\n");
 			return new Result(false, cnounce, signMessage(toHash + "false"));
 		}
 
@@ -196,17 +198,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	@Override
 	public Result stateOfGood(String userId, String cnounce, String goodId, byte[] signature) throws RemoteException {
+		System.out.println("------ STATE OF GOOD ------\nUser: " + userId + "\tGood: " + goodId);
+		
 		String toHash = "";
 		try {
-			toHash = nounceList.get(userId) + cnounce + userId + goodId;
-			System.out.println(toHash);
-			if (!verifySignatureAndHash(toHash, signature, userId))
-				return new Result(false, cnounce, signMessage(toHash + "false"));
-		
 			Good good;
-			if ((good = goodsList.get(goodId)) != null) {
+			if ((good = goodsList.get(goodId)) != null && verifySignatureAndHash(toHash, signature, userId)) {
 				boolean status = goodsToSell.contains(goodId);
-	
+				System.out.println("Result: " + good.getUserId() + "\n");
 				return new Result(good.getUserId(), status, cnounce, signMessage(toHash + "true"));
 			}
 			return new Result(false, cnounce, signMessage(toHash + "false"));
@@ -220,35 +219,30 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	@Override
 	public Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature)
 			throws RemoteException {
+		System.out.println("------ TRANSFER GOOD ------");
 
 		String msg = nounceList.get(sellerId) + cnounce + sellerId + buyerId + goodId;
-
-		if (!verifySignatureAndHash(msg, signature, sellerId)) {
-			return new Result(false, cnounce, signMessage(msg + "false"));
-		}
-
 		Good good;
-		if ((good = goodsList.get(goodId)) != null) {
-			if (good.getUserId().equals(sellerId) && goodsToSell.contains(goodId)) {
-				good.setUserId(buyerId);
-				goodsList.put(goodId, good);
-				goodsToSell.remove(goodId);
-				saveTransfer(sellerId, buyerId, goodId);
-				printGoods();
-				System.out.println(msg + "true");
-				
-				try {
-					Transfer transfer = new Transfer(transferId++, buyerId, sellerId, goodId, signWithCC(transferId+buyerId+sellerId+goodId));
-					return new Result(true, transfer, cnounce, signMessage(msg + "true"));
-				} catch (UnsupportedEncodingException | PKCS11Exception e) {
-					System.err.println("ERROR: Signing with CC not possible!");
-					return new Result(false, cnounce, signMessage(msg + "false"));
-				}
-				
-				
+
+		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(sellerId) && goodsToSell.contains(goodId) && verifySignatureAndHash(msg, signature, sellerId)) {
+			good.setUserId(buyerId);
+			goodsList.put(goodId, good);
+			goodsToSell.remove(goodId);
+			saveTransfer(sellerId, buyerId, goodId);
+			printGoods();				
+			try {
+				Transfer transfer = new Transfer(transferId++, buyerId, sellerId, goodId, signWithCC(transferId+buyerId+sellerId+goodId));
+				System.out.println("Result: YES\n");
+				return new Result(true, transfer, cnounce, signMessage(msg + "true"));
+			} catch (UnsupportedEncodingException | PKCS11Exception e) {
+				System.err.println("ERROR: Signing with CC not possible");
+				System.out.println("Result: NO\n");
+				return new Result(false, cnounce, signMessage(msg + "false"));
 			}
+				
 		}
 		printGoods();
+		System.out.println("Result: NO\n");
 		return new Result(false, cnounce, signMessage(msg + "false"));
 	}
 
@@ -291,13 +285,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			outputTransactions.write(sellerId + ";" + buyerId + ";" + goodId + "\n");
 			outputTransactions.flush();
 		} catch (IOException e) {
-			System.out.println("Error writing to TRANSACTIONS file");
+			System.err.println("ERROR: writing to TRANSACTIONS file failed");
 			e.printStackTrace();
 		}
 	}
 	
 	private void sellingListUpdate(String sellerId, String goodId) {
-		System.out.println("WRITING TO SELLING FILE!!!!!");
 		try {
 			outputSellings.write(sellerId + ";" + goodId + "\n");
 			outputSellings.flush();
@@ -324,7 +317,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 	
 	private void printSellingList() {
-		System.out.println("Recovering SELLING list");
 		for (String entry : goodsToSell) 
 		    System.out.println("Good " + entry + " is selling");
 	}
@@ -496,25 +488,18 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 	
 	private void setupCititzenCard() throws PteidException, CertificateException, pteidlib.PteidException {
-		System.out.println("            //Load the PTEidlibj");
-		System.out.println(System.getProperty("java.library.path"));
 		System.loadLibrary("pteidlibj");
 		pteid.Init(""); // Initializes the eID Lib
 		pteid.SetSODChecking(false); // Don't check the integrity of the ID, address and photo (!)
 
 		String osName = System.getProperty("os.name");
 		String javaVersion = System.getProperty("java.version");
-		System.out.println("Java version: " + javaVersion);
 
 		java.util.Base64.Encoder encoder = java.util.Base64.getEncoder();
 
 		String libName = "libpteidpkcs11.so";
 
-		// access the ID and Address data via the pteidlib
-		System.out.println("            -- accessing the ID  data via the pteidlib interface");
-
 		X509Certificate cert = getCertFromByteArray(getCertificateInBytes(0));
-//		System.out.println("Citized Authentication Certificate " + cert);
 		
 		writeCertToKeyStore(cert);
 		
@@ -534,16 +519,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	        }
 
 	        //Open the PKCS11 session
-	        System.out.println("            //Open the PKCS11 session");
 	        p11_session = pkcs11.C_OpenSession(0, PKCS11Constants.CKF_SERIAL_SESSION, null, null);
 			
 	     // Token login 
-            System.out.println("            //Token login");
             pkcs11.C_Login(p11_session, 1, null);
             CK_SESSION_INFO info = pkcs11.C_GetSessionInfo(p11_session);
 	
 	    // Get available keys
-            System.out.println("            //Get available keys");
             CK_ATTRIBUTE[] attributes = new CK_ATTRIBUTE[1];
             attributes[0] = new CK_ATTRIBUTE();
             attributes[0].type = PKCS11Constants.CKA_CLASS;
@@ -552,31 +534,21 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
             pkcs11.C_FindObjectsInit(p11_session, attributes);
             long[] keyHandles = pkcs11.C_FindObjects(p11_session, 5);
 
-	    // points to auth_key
-            System.out.println("            //points to auth_key. No. of keys:"+keyHandles.length);
-
             long signatureKey = keyHandles[0];		//test with other keys to see what you get
             pkcs11.C_FindObjectsFinal(p11_session);
             
-            
             // initialize the signature method
-            System.out.println("            //initialize the signature method");
       	    CK_MECHANISM mechanism = new CK_MECHANISM();
             mechanism.mechanism = PKCS11Constants.CKM_SHA1_RSA_PKCS;
             mechanism.pParameter = null;
             pkcs11.C_SignInit(p11_session, mechanism, signatureKey);
-	        
-	        
-	        
+            
 	        
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 			System.exit(1);
 		}
-        
-		
-
 	}
 	
 	//Returns the CITIZEN AUTHENTICATION CERTIFICATE
@@ -585,11 +557,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
     }
 
     // Returns the n-th certificate, starting from 0
-    private static  byte[] getCertificateInBytes(int n) {
+    private static byte[] getCertificateInBytes(int n) {
         byte[] certificate_bytes = null;
         try {
             PTEID_Certif[] certs = pteid.GetCertificates();
-            System.out.println("Number of certs found: " + certs.length);
             int i = 0;
 
             certificate_bytes = certs[n].certif; //gets the byte[] with the n-th certif

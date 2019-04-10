@@ -97,7 +97,7 @@ public class Client {
                     	break;
                     case 5:
                     	System.out.println("Goodbye!");
-                    	return;
+                    	System.exit(0);
                     default:
                     	System.out.println("Invalid option!");
                 }

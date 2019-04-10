@@ -40,10 +40,13 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	private static final String SIGNATURE_ALGORITHM = "SHA1withRSA";
 	private static final String ALGORITHM = "RSA";
 	private static final String NOTARYPUBKEYPATH = "Server/storage/notaryPublicKey.txt";
+	private static final String NOTARY_ID = "Notary";
 
 	private final String id;
 	private final String user2;
 	private final String user3;
+	private UserInterface remoteUser2 = null;
+	private UserInterface remoteUser3 = null;
 	// List of all goods possessed
 	private Map<String, Boolean> goods;
 	// Instance of remote Notary Object
@@ -54,6 +57,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	private String password; // KeyStore password
 	PrivateKey privateKey;
 	PublicKey publicKey;
+	
+	private Map<String, String> nounceList = new HashMap<>();
 
 	public User(String id, NotaryInterface notary, String user2, String user3) throws RemoteException {
 
@@ -98,18 +103,25 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	}
 
 	@Override
-	public Boolean buyGood(String userId, String goodId) throws RemoteException {
+	public String getNounce(String userId, byte[] signature) {
+		
+		String nounce = generateCNounce();
+		nounceList.put(userId, nounce);
+		return nounce;
+	}
+	
+	@Override
+	public Boolean buyGood(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
 
-		String cnounce = generateCNounce();
+		String nounceToNotary = generateCNounce();
 		String data = notary.getNounce(this.id) + cnounce + this.id + userId + goodId;
-		byte[] hashedData = hashMessage(data);
-		byte[] signedHashedData = signByteArray(hashedData);
+		byte[] signedHashedData = signMessage(data);
 
-		Result result = notary.transferGood(this.getId(), userId, goodId, cnounce, signedHashedData);
+		Result result = notary.transferGood(this.getId(), userId, goodId, nounceToNotary, signedHashedData);
 
 //		System.out.println("> " + data + result.getResult());
 
-		if (verifySignature(data + result.getResult(), result.getSignature())) {
+		if (verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 			System.out.println("Signature verified! Notary confirmed buy good");
 			goods.put(goodId, false);
 			return result.getResult();
@@ -122,14 +134,34 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	
 	public boolean buying(String goodId) throws RemoteException {
 		Result stateOfGood = stateOfGood(goodId);
-		if (false == stateOfGood.getResult()) {
+		if (stateOfGood == null || false == stateOfGood.getResult()) {
 			System.out.println("Good is not up for sale");
 			return false;
 		}
 		else {
 			String seller = stateOfGood.getUserId();
-			buyGood(seller, goodId);
-			return true;
+			
+			if(remoteUser2 == null || remoteUser3 == null) {
+				lookUpUsers();
+			}
+			
+			if(seller.equals(user2) && remoteUser2 != null) {
+				
+				String nounce = remoteUser2.getNounce(this.id, signMessage(this.id));
+				String cnounce = generateCNounce();
+				nounceList.put(user2, cnounce);
+				String toSign = nounce + cnounce + this.id + goodId;
+				return remoteUser2.buyGood(this.id, goodId, cnounce, signMessage(toSign));
+			}
+			else if(seller.equals(user3) && remoteUser3 != null) {
+				String nounce = remoteUser3.getNounce(this.id, signMessage(this.id));
+				String cnounce = generateCNounce();
+				nounceList.put(user3, cnounce);
+				String toSign = nounce + cnounce + this.id + goodId;
+				return remoteUser3.buyGood(this.id, goodId, cnounce, signMessage(toSign));
+			}
+			
+			return false;
 		}
 	}
 
@@ -138,13 +170,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			String nounce = notary.getNounce(this.id);
 			String cnounce = generateCNounce();
 			String data = nounce + cnounce + this.id + goodId;
-//			System.out.println(str);
-			byte[] hashedData = hashMessage(data);
-			byte[] signedHashedData = signByteArray(hashedData);
-			//System.out.println("Intention > " + notary.intentionToSell(this.id, goodId, cnounce, hashSigned).getResult());
-			Result result = notary.intentionToSell(this.id, goodId, cnounce, signedHashedData);
+			Result result = notary.intentionToSell(this.id, goodId, cnounce, signMessage(data));
 			
-			if (verifySignature(data + result.getResult(), result.getSignature())) {
+			if (verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 				System.out.println("Signature verified! Notary confirmed intention to sell");
 				goods.replace(goodId, false);
 				return result.getResult();
@@ -163,14 +191,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		try {
 			String cnounce = generateCNounce();
 			String data = notary.getNounce(this.id) + cnounce + this.id + goodId;
-			byte[] hashedData = hashMessage(data);
-			byte[] signedHashedData = signByteArray(hashedData);
 	
-			Result result = notary.stateOfGood(this.getId(), cnounce, goodId, signedHashedData);
+			Result result = notary.stateOfGood(this.getId(), cnounce, goodId, signMessage(data));
 	
 	//		System.out.println("> " + data + result.getResult());
 	
-			if (verifySignature(data + result.getResult(), result.getSignature())) {
+			if (verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 				System.out.println("Signature verified! Notary confirmed state of good");
 				return result;
 			}
@@ -194,17 +220,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	
 	private void lookUpUsers() {
 		try {
-			UserInterface user2 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser2());
-			UserInterface user3 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser3());
-		} catch (MalformedURLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (RemoteException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (NotBoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			remoteUser2 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser2());
+			remoteUser3 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser3());
+		} catch (MalformedURLException | RemoteException | NotBoundException e) {
+			System.err.println("ERROR looking up user");
 		}
 		
 	}
@@ -212,12 +231,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	private String generateCNounce() {
 		return new BigInteger(256, secRandom).toString();
 	}
-
-	private boolean verifySignature(String toVerify, byte[] signature) {
+		
+	private boolean verifySignature(String id, String toVerify, byte[] signature) {
 		try {
 
 			Signature sig = Signature.getInstance(SIGNATURE_ALGORITHM);
-			sig.initVerify(getStoredCert("Notary"));
+			sig.initVerify(getStoredCert(id));
 
 			byte[] hashedMsg = hashMessage(toVerify);
 			sig.update(hashedMsg);
@@ -247,7 +266,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 	}
 
-	private byte[] signByteArray(byte[] array) {
+	private byte[] signMessage(String msg) {
+		byte[] array = hashMessage(msg);
 		Signature rsaForSign;
 		try {
 			rsaForSign = Signature.getInstance(SIGNATURE_ALGORITHM);

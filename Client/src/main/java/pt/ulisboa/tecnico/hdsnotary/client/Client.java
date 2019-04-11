@@ -15,7 +15,7 @@ public class Client {
 
 		System.out.println("Initializing Client");
 
-		int PORT = 3001;
+		int PORT = 3000;
 
 		Scanner scanner = new Scanner(System.in);
 		System.out.println("Welcome");
@@ -26,6 +26,12 @@ public class Client {
         Registry reg = null;
         
 		try {
+			
+			reg = LocateRegistry.getRegistry(PORT);
+			
+			for(String s : reg.list()) {
+				System.out.println("Name > " + s);
+			}
 
             NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
 
@@ -137,6 +143,7 @@ public class Client {
         
 		} catch (NotBoundException | IOException e) {
             System.out.println("ERROR locating Notary\n Exiting!");
+            e.printStackTrace();
             scanner.close();
             return;
 	    } catch (KeyStoreException e) {

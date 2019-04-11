@@ -174,7 +174,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 					&& !goodsToSell.contains(good.getGoodId())
 					&& cryptoUtils.verifySignature(userId, data, signature)) {
 				goodsToSell.add(good.getGoodId());
-				sellingListUpdate(userId, good.getGoodId());
+				sellingListUpdate(good.getGoodId());
 				System.out.println("Result: YES\n");
 				return new Result(true, cnounce, cryptoUtils.signMessage(data + "true"));
 			}
@@ -266,12 +266,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private void recoverSellingList() throws IOException {
 		System.out.println("Recovering selling list");
 		String line;
-		String[] splitLine;
 		while ((line = inputSellings.readLine()) != null) {
 			System.out.println("--> " + line);
-			splitLine = line.split(";");
-			System.out.println("Seller: " + splitLine[0] + " GoodId: " + splitLine[1]);
-			goodsToSell.add(splitLine[1]);
+			System.out.println("GoodId: " + line);
+			goodsToSell.add(line);
 		}
 
 	}
@@ -301,9 +299,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 	}
 
-	private void sellingListUpdate(String sellerId, String goodId) {
+	private void sellingListUpdate(String goodId) {
 		try {
-			outputSellings.write(sellerId + ";" + goodId + "\n");
+			outputSellings.write(goodId + "\n");
 			outputSellings.flush();
 		} catch (IOException e) {
 			System.err.println("ERROR: writing to SELLINGS file");

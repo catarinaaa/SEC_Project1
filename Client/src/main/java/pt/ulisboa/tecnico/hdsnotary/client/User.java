@@ -4,6 +4,8 @@ import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
 import java.util.HashMap;
@@ -120,43 +122,48 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		}
 	}
 	
-	public boolean buying(String goodId) throws RemoteException {
-		Result stateOfGood = stateOfGood(goodId);
-		if (stateOfGood == null || false == stateOfGood.getResult()) {
-			System.out.println("Good is not up for sale");
-			return false;
-		}
-		else {
-			String seller = stateOfGood.getUserId();
-			
-			if(remoteUser2 == null || remoteUser3 == null) {
-				lookUpUsers();
+	public boolean buying(String goodId) {
+		try {
+			Result stateOfGood = stateOfGood(goodId);
+			if (stateOfGood == null || false == stateOfGood.getResult()) {
+				System.out.println("Good is not up for sale");
+				return false;
 			}
-			
-			Boolean result = false;
-			
-			if(seller.equals(user2) && remoteUser2 != null) {
+			else {
+				String seller = stateOfGood.getUserId();
 				
-				String nounce = remoteUser2.getNounce(this.id, cryptoUtils.signMessage(this.id));
-				String cnounce = cryptoUtils.generateCNounce();
-				nounceList.put(user2, cnounce);
-				String toSign = nounce + cnounce + this.id + goodId;
-				result = remoteUser2.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+				if(remoteUser2 == null || remoteUser3 == null) {
+					lookUpUsers();
+				}
+				
+				Boolean result = false;
+				
+				if(seller.equals(user2) && remoteUser2 != null) {
+					
+					String nounce = remoteUser2.getNounce(this.id, cryptoUtils.signMessage(this.id));
+					String cnounce = cryptoUtils.generateCNounce();
+					nounceList.put(user2, cnounce);
+					String toSign = nounce + cnounce + this.id + goodId;
+					result = remoteUser2.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+				}
+				else if(seller.equals(user3) && remoteUser3 != null) {
+					String nounce = remoteUser3.getNounce(this.id, cryptoUtils.signMessage(this.id));
+					String cnounce = cryptoUtils.generateCNounce();
+					nounceList.put(user3, cnounce);
+					String toSign = nounce + cnounce + this.id + goodId;
+					result = remoteUser3.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+				}
+				
+				if(result) {
+					goods.put(goodId, false);
+					System.out.println(goodId + "was add to the list of goods!");
+				}
+				
+				return false;
 			}
-			else if(seller.equals(user3) && remoteUser3 != null) {
-				String nounce = remoteUser3.getNounce(this.id, cryptoUtils.signMessage(this.id));
-				String cnounce = cryptoUtils.generateCNounce();
-				nounceList.put(user3, cnounce);
-				String toSign = nounce + cnounce + this.id + goodId;
-				result = remoteUser3.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
-			}
-			
-			if(result) {
-				goods.put(goodId, false);
-				System.out.println(goodId + "was add to the list of goods!");
-			}
-			
-			return false;
+		} catch (RemoteException e) {
+			rebind();
+			return buying(goodId);
 		}
 	}
 
@@ -178,8 +185,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				return false;
 			}
 		} catch (RemoteException e) {
-			// TODO Auto-generated catch block
-			return false;
+			rebind();
+			return intentionSell(goodId);
 		}
 	}
 	
@@ -202,10 +209,19 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				return result;
 			}
 		} catch(RemoteException e) {
+			rebind();
+			return stateOfGood(goodId);
+		}
+	}
+	
+	public void rebind() {
+		try {
+        	Registry reg = LocateRegistry.getRegistry(3000);
+			this.notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
+            reg.rebind(getId(), this);
+		} catch (MalformedURLException | RemoteException | NotBoundException e) {
 			e.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	public void listGoods() {
@@ -224,6 +240,5 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		} catch (MalformedURLException | RemoteException | NotBoundException e) {
 			System.err.println("ERROR looking up user");
 		}
-		
 	}
 }

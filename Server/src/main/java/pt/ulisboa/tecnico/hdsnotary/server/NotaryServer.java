@@ -19,11 +19,11 @@ public class NotaryServer {
 			System.out.println("Awaiting connections");
 			System.out.println("Press enter to shutdown");
 			System.in.read();
-			System.out.println("Server termindated");
+			System.out.println("Server terminated");
 			System.exit(0);
 
 		} catch (Exception e) {
-			System.err.println("ERROR, exiting!");
+			System.err.println("ERROR: Aborting...");
 			e.printStackTrace();
 			return;
 		}

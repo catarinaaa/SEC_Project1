@@ -129,13 +129,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			inputSellings = new BufferedReader(new FileReader(sellingListFile));
 			outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
 			recoverSellingList();
-			printSellingList();
 
 			// Recovering transactions from transactions file
 			inputTransactions = new BufferedReader(new FileReader(transactionsFile));
 			outputTransactions = new BufferedWriter(new FileWriter(transactionsFile, true));
 			recoverTransactions();
-			printGoods();
 
 		} catch (IOException e) {
 			System.err.println("ERROR: creation of Notary failed. Aborting...");

@@ -3,6 +3,7 @@ package pt.ulisboa.tecnico.hdsnotary.client;
 import java.io.IOException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.security.KeyStoreException;
@@ -18,7 +19,7 @@ public class Client {
 		int PORT = 3000;
 
 		Scanner scanner = new Scanner(System.in);
-		System.out.println("Welcome");
+		System.out.println("************* WELCOME *************");
 
 		User user = null;
         String name = "";

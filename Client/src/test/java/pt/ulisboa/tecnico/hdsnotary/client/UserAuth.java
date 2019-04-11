@@ -16,7 +16,7 @@ import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
 import pt.ulisboa.tecnico.hdsnotary.library.Result;
 import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
 
-public class User extends UnicastRemoteObject implements UserInterface {
+public class UserAuth extends UnicastRemoteObject implements UserInterface {
 	
 	private static final long serialVersionUID = 1L;
 
@@ -40,7 +40,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	
 	private Map<String, String> nounceList = new HashMap<>();
 
-	public User(String id, NotaryInterface notary, String user2, String user3) throws RemoteException, KeyStoreException {
+	public UserAuth(String id, NotaryInterface notary, String user2, String user3) throws RemoteException, KeyStoreException {
 
 		this.id = id;
 		this.notary = notary;
@@ -172,10 +172,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 	public boolean intentionSell(String goodId) {
 		try {
-			String nounce = notary.getNounce(this.id);
+			String nounce = notary.getNounce("Bob");
 			String cnounce = cryptoUtils.generateCNounce();
-			String data = nounce + cnounce + this.id + goodId;
-			Result result = notary.intentionToSell(this.id, goodId, cnounce, cryptoUtils.signMessage(data));
+			String data = nounce + cnounce + "Bob" + goodId;
+			Result result = notary.intentionToSell("Bob", goodId, cnounce, cryptoUtils.signMessage(data));
 			
 			if (result != null && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 				System.out.println("Signature verified! Notary confirmed intention to sell");

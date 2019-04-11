@@ -202,12 +202,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		System.out.println("------ STATE OF GOOD ------\nUser: " + userId + "\tGood: " + goodId);
 
 		String data = nounceList.get(userId) + cnounce + userId + goodId;
+		System.out.println("DATA: " + data);
 		try {
 			Good good;
 			if ((good = goodsList.get(goodId)) != null && cryptoUtils.verifySignature(userId, data, signature)) {
 				boolean status = goodsToSell.contains(goodId);
 				System.out.println("Result: " + good.getUserId() + "\nFor Sale: " + status + "\n");
-				return new Result(good.getUserId(), status, cnounce, cryptoUtils.signMessage(data + "true"));
+				return new Result(good.getUserId(), status, cnounce, cryptoUtils.signMessage(data + status));
 			}
 			return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
 		} catch (Exception e) {

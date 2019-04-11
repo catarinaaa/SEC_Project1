@@ -13,32 +13,27 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.InvalidKeyException;
-import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
-import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.UnrecoverableEntryException;
 import java.security.KeyStore.PrivateKeyEntry;
-import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.Scanner;
 import java.util.TreeMap;
 
 import sun.security.pkcs11.wrapper.CK_ATTRIBUTE;
@@ -103,23 +98,47 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	protected NotaryImpl() throws RemoteException {
 		super();
 		populateList();
+		Scanner scanner = new Scanner(System.in);
 
+		int count = 0;
+		while(count <= 5) {
+			try {
+				setupCititzenCard();
+				break;
+			} catch (CertificateException | NoSuchMethodException | SecurityException | ClassNotFoundException
+					| IllegalAccessException | IllegalArgumentException | InvocationTargetException | PteidException
+					| pteidlib.PteidException | PKCS11Exception e1) {
+				System.out.println("Please insert card and press Enter");
+				scanner.nextLine();
+				count++;
+			} finally {
+				if (count == 5) {
+					System.err.println("ERROR: Number of tries exceeded. Aborting...");
+					scanner.close();
+					System.exit(1);
+				}
+			}
+		}
+		
 		try {
-
+			
 			createDatabases();
 			
-			setupCititzenCard();
-
-			// generate public/private keys
-			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			// !!!!!! IMPLEMENT CARTAO DO CIDADAO !!!!!!
-			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-			try {
-				this.privateKey = getStoredKey();
-			} catch (KeyStoreException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+			count = 0;
+			while(count <= 5) {
+				try {
+					this.privateKey = getStoredKey();
+				} catch (KeyStoreException e) {
+					System.out.println("ERROR: KeyStore load failed.\nInsert another password [default=Notary] to try again and press Enter");
+					scanner.nextLine();
+					count++;
+				} finally {
+					if (count == 5) {
+						System.err.println("ERROR: Number of tries exceeded. Aborting...");
+						scanner.close();
+						System.exit(1);
+					}
+				}
 			}
 			
 
@@ -140,8 +159,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			printGoods();
 			
 
-		} catch (IOException | NoSuchAlgorithmException | InvalidKeyException | CertificateException | PteidException | pteidlib.PteidException e) {
-			System.err.println("ERROR: creation of Notary failed");
+		} catch (IOException | NoSuchAlgorithmException | InvalidKeyException e) {
+			System.err.println("ERROR: creation of Notary failed. Aborting...");
 			System.exit(1);
 		}
 	}
@@ -325,8 +344,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			inputTransactions.close();
 			outputTransactions.close();
 		} catch (IOException e) {
-			System.err.println("ERROR: Closing files failed");
-			System.exit(1);
+			System.err.println("ERROR: Closing files failed. Transactions database may not be updated");
 		}
 
 	}
@@ -384,14 +402,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	            fis.close();
 	        } 
 	    } catch (FileNotFoundException | CertificateException e) {
-	    	System.err.println("ERROR: KeyStore/certificate of user" + userId + " not found");
-	    	System.exit(1);
+	    	System.err.println("ERROR: KeyStore/certificate of user " + userId + " not found");
+	    	throw new KeyStoreException();
 	    } catch(IOException e) {
 	    	System.err.println("ERROR: Wrong password of KeyStore");
-	    	System.exit(1);
 	    } catch(NoSuchAlgorithmException e) {
-	    	System.err.println("ERROR: Wrong algorithm in KeyStore");
-	    	System.exit(1);	    	
+	    	System.err.println("ERROR: Wrong algorithm in KeyStore");  	
 	    }
 	    return cert;
 	}
@@ -406,7 +422,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			return signature.sign();
 		} catch (NoSuchAlgorithmException | UnsupportedEncodingException | SignatureException e) {
 			System.err.println("ERROR: Signing message failed");
-			System.exit(1);
 		}
 		return null;
 	}
@@ -475,7 +490,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	        } 
 	    } catch (FileNotFoundException | CertificateException e) {
 	    	System.err.println("ERROR: KeyStore/certificate of user" + id + " not found");
-	    	System.exit(1);
+	    	throw new KeyStoreException();
 	    } catch(UnrecoverableEntryException | IOException e) {
 	    	System.err.println("ERROR: Wrong password of KeyStore");
 	    	System.exit(1);
@@ -486,7 +501,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	    return priKey;
 	}
 	
-	private void setupCititzenCard() throws PteidException, CertificateException, pteidlib.PteidException {
+	private void setupCititzenCard() throws PteidException, CertificateException, pteidlib.PteidException, PKCS11Exception, NoSuchMethodException, SecurityException, ClassNotFoundException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
 		System.loadLibrary("pteidlibj");
 		pteid.Init(""); // Initializes the eID Lib
 		pteid.SetSODChecking(false); // Don't check the integrity of the ID, address and photo (!)
@@ -503,51 +518,46 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		writeCertToKeyStore(cert);
 		
 		Class pkcs11Class;
-		try {
-			pkcs11Class = Class.forName("sun.security.pkcs11.wrapper.PKCS11");
-			
-			if (javaVersion.startsWith("1.5."))
-	        {
-	            Method getInstanceMethode = pkcs11Class.getDeclaredMethod("getInstance", new Class[] { String.class, CK_C_INITIALIZE_ARGS.class, boolean.class });
-	            pkcs11 = (PKCS11)getInstanceMethode.invoke(null, new Object[] { libName, null, false });
-	        }
-	        else
-	        {
-	            Method getInstanceMethode = pkcs11Class.getDeclaredMethod("getInstance", new Class[] { String.class, String.class, CK_C_INITIALIZE_ARGS.class, boolean.class });
-	            pkcs11 = (PKCS11)getInstanceMethode.invoke(null, new Object[] { libName, "C_GetFunctionList", null, false });
-	        }
 
-	        //Open the PKCS11 session
-	        p11_session = pkcs11.C_OpenSession(0, PKCS11Constants.CKF_SERIAL_SESSION, null, null);
-			
-	     // Token login 
-            pkcs11.C_Login(p11_session, 1, null);
-            CK_SESSION_INFO info = pkcs11.C_GetSessionInfo(p11_session);
-	
-	    // Get available keys
-            CK_ATTRIBUTE[] attributes = new CK_ATTRIBUTE[1];
-            attributes[0] = new CK_ATTRIBUTE();
-            attributes[0].type = PKCS11Constants.CKA_CLASS;
-            attributes[0].pValue = new Long(PKCS11Constants.CKO_PRIVATE_KEY);
+		pkcs11Class = Class.forName("sun.security.pkcs11.wrapper.PKCS11");
+		
+		if (javaVersion.startsWith("1.5."))
+        {
+            Method getInstanceMethode = pkcs11Class.getDeclaredMethod("getInstance", new Class[] { String.class, CK_C_INITIALIZE_ARGS.class, boolean.class });
+            pkcs11 = (PKCS11)getInstanceMethode.invoke(null, new Object[] { libName, null, false });
+        }
+        else
+        {
+            Method getInstanceMethode = pkcs11Class.getDeclaredMethod("getInstance", new Class[] { String.class, String.class, CK_C_INITIALIZE_ARGS.class, boolean.class });
+            pkcs11 = (PKCS11)getInstanceMethode.invoke(null, new Object[] { libName, "C_GetFunctionList", null, false });
+        }
 
-            pkcs11.C_FindObjectsInit(p11_session, attributes);
-            long[] keyHandles = pkcs11.C_FindObjects(p11_session, 5);
+        //Open the PKCS11 session
+        p11_session = pkcs11.C_OpenSession(0, PKCS11Constants.CKF_SERIAL_SESSION, null, null);
+		
+     // Token login 
+        pkcs11.C_Login(p11_session, 1, null);
+        CK_SESSION_INFO info = pkcs11.C_GetSessionInfo(p11_session);
 
-            long signatureKey = keyHandles[0];		//test with other keys to see what you get
-            pkcs11.C_FindObjectsFinal(p11_session);
-            
-            // initialize the signature method
-      	    CK_MECHANISM mechanism = new CK_MECHANISM();
-            mechanism.mechanism = PKCS11Constants.CKM_SHA1_RSA_PKCS;
-            mechanism.pParameter = null;
-            pkcs11.C_SignInit(p11_session, mechanism, signatureKey);
+    // Get available keys
+        CK_ATTRIBUTE[] attributes = new CK_ATTRIBUTE[1];
+        attributes[0] = new CK_ATTRIBUTE();
+        attributes[0].type = PKCS11Constants.CKA_CLASS;
+        attributes[0].pValue = new Long(PKCS11Constants.CKO_PRIVATE_KEY);
+
+        pkcs11.C_FindObjectsInit(p11_session, attributes);
+        long[] keyHandles = pkcs11.C_FindObjects(p11_session, 5);
+
+        long signatureKey = keyHandles[0];		//test with other keys to see what you get
+        pkcs11.C_FindObjectsFinal(p11_session);
+        
+        // initialize the signature method
+  	    CK_MECHANISM mechanism = new CK_MECHANISM();
+        mechanism.mechanism = PKCS11Constants.CKM_SHA1_RSA_PKCS;
+        mechanism.pParameter = null;
+        pkcs11.C_SignInit(p11_session, mechanism, signatureKey);
             
 	        
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			System.exit(1);
-		}
 	}
 	
 	//Returns the CITIZEN AUTHENTICATION CERTIFICATE

@@ -81,7 +81,7 @@ public class Client {
             
             while(exit) {
 
-                System.out.println("Choose one option:");
+                System.out.println("\nChoose one option:");
                 System.out.println("1 - List goods owned");
                 System.out.println("2 - Sell good");
                 System.out.println("3 - Buy good");
@@ -93,21 +93,21 @@ public class Client {
 
                 switch (scanner.nextInt()) {
                     case 1:
-                    	System.out.println("Printing list of goods owned by " + name);
+                    	System.out.println("------ PRINT GOODS " + name + " ------");
                         user.listGoods();
                         break;
                     case 2:
-                    	System.out.println("Input good ID of good you wish to sell");
+                    	System.out.println("------ INTENTION TO SELL ------\nInput good ID of good you wish to sell:");
                     	String goodId = scanner.next();
                     	user.intentionSell(goodId);
                     	break;
                     case 3:
-                    	System.out.println("Input good ID of good you wish to buy");
+                    	System.out.println("------ BUY GOOD ------\nInput good ID of good you wish to buy:");
                     	goodId = scanner.next();
                     	user.buying(goodId);
                     	break;
                     case 4:
-                    	System.out.println("Input good ID of good you wish to check state");
+                    	System.out.println("------ GET STATE OF GOOD ------\nInput good ID of good you wish to check state:");
                     	goodId = scanner.next();
                     	user.stateOfGood(goodId);
                     	break;

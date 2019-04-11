@@ -84,18 +84,16 @@ public class CryptoUtilities {
 			byte[] hashedMsg = hashMessage(toVerify);
 			sig.update(hashedMsg);
 			if (sig.verify(signature)) {
-				System.out.println("YEY!");
 				return true;
 			}
 				
 			else {
-				System.out.println("NOOOOOOOOOOOO");
 				return false;
 			}
 				
 
 		} catch (NoSuchAlgorithmException | SignatureException | InvalidKeyException | KeyStoreException e) {
-			System.err.println("Exception caught while verifying signature!");
+			System.err.println("ERROR: Exception caught while verifying signature");
 			e.printStackTrace();
 			return false;
 		}

@@ -170,10 +170,11 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			if (result != null && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 				System.out.println("Signature verified! Notary confirmed intention to sell");
 				goods.replace(goodId, true);
+				System.out.println("Result: " + goodId + " is now for sale");
 				return result.getResult();
 			}
 			else {
-				System.out.println("Signature does not verify!");
+				System.err.println("ERROR: Signature does not verify");
 				return false;
 			}
 		} catch (RemoteException e) {
@@ -192,11 +193,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	//		System.out.println("> " + data + result.getResult());
 	
 			if (cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
-				System.out.println("Signature verified! Notary confirmed state of good");
+				System.out.println("Signature verified! Notary confirmed state of good message");
+				System.out.println("For sale: " + result.getResult() +"\n");
 				return result;
 			}
 			else {
-				System.out.println("Signature does not verify!");
+				System.err.println("ERROR: Signature does not verify");
 				return result;
 			}
 		} catch(RemoteException e) {
@@ -209,7 +211,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	public void listGoods() {
 		for (String goodId: goods.keySet()){
 			Boolean value = goods.get(goodId);
-            System.out.println(goodId + "-->" + value);
+            System.out.println(goodId + " --> For sale: " + value);
 		} 
 	}
 	

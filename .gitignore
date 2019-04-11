@@ -44,3 +44,6 @@ log/
 .metadata/
 .settings/
 .recommenders/
+
+# Cartao do Cidadao KeyStore
+CertCC.p12 

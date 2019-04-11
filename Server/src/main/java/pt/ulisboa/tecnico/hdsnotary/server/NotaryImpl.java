@@ -53,6 +53,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private final static String certPath = "Server/storage/CertCC.p12";
 	private final static String TRANSACTIONSPATH = "Server/storage/transactions.txt";
 	private final static String SELLINGLISTPATH = "Server/storage/selling.txt";
+	private final static String TEMPFILE = "Server/storage/temp.txt";
 
 	// Singleton
 	private static NotaryImpl instance = null;
@@ -74,6 +75,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private BufferedWriter outputTransactions = null;
 	private BufferedReader inputSellings = null;
 	private BufferedWriter outputSellings = null;
+	private BufferedWriter tempWriter = null;
 	private int transferId = 1;
 
 	// CC
@@ -140,7 +142,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	public static NotaryImpl getInstance() throws KeyStoreException {
 		if (instance == null) {
 			try {
-				instance = new NotaryImpl(false);
+				instance = new NotaryImpl(true);
 			} catch (RemoteException e) {
 				e.printStackTrace();
 				System.exit(1);
@@ -212,8 +214,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature)
-			throws RemoteException {
+	public Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature) throws IOException {
 		System.out.println("------ TRANSFER GOOD ------");
 
 		System.out.println("Seller > " + sellerId);
@@ -231,6 +232,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			goodsList.put(goodId, good);
 			goodsToSell.remove(goodId);
 			saveTransfer(sellerId, buyerId, goodId);
+			removeSelling(goodId);
 			printGoods();
 			try {
 				Transfer transfer = new Transfer(transferId++, buyerId, sellerId, goodId,
@@ -315,7 +317,24 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		goodsList.put("good4", new Good("Bob", "good4"));
 		goodsList.put("good5", new Good("Charlie", "good5"));
 		goodsList.put("good6", new Good("Charlie", "good6"));
-
+	}
+	
+	private void removeSelling(String goodId) throws IOException {
+		//Remover given goodId from selling list
+		File tempFile = new File(TEMPFILE);
+		System.out.println("REMOVING FROM LIST!!!!!");
+		System.out.println("I WANT TO REMOVE " + goodId);
+		String currentLine;
+		tempWriter = new BufferedWriter(new FileWriter(tempFile));
+		while ((currentLine = inputSellings.readLine()) != null) {
+			System.out.println("CURRENT LINE = " + currentLine);
+		    // trim newline when comparing with lineToRemove
+		    String trimmedLine = currentLine.trim();
+		    if(trimmedLine.equals(goodId)) continue;
+		    tempWriter.write(currentLine + ("\n"));
+		}
+		tempWriter.close(); 
+		tempFile.renameTo(sellingListFile);
 	}
 
 	private void printGoods() {

@@ -41,7 +41,7 @@ public class Client {
 	                System.out.println("Choose one user to create:");
 	                System.out.println("1 - Alice");
 	                System.out.println("2 - Bob");
-	                System.out.println("3 - Carlos");
+	                System.out.println("3 - Charlie");
             	
 
                 while(!scanner.hasNextInt())

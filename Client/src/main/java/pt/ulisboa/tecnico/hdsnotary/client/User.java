@@ -194,10 +194,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		try {
 			String cnounce = cryptoUtils.generateCNounce();
 			String data = notary.getNounce(this.id) + cnounce + this.id + goodId;
+			
+			System.out.println("DATA: " + data);
 	
 			Result result = notary.stateOfGood(this.getId(), cnounce, goodId, cryptoUtils.signMessage(data));
 	
-	//		System.out.println("> " + data + result.getResult());
+			System.out.println("> " + data + result.getResult());
 	
 			if (cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 				System.out.println("Signature verified! Notary confirmed state of good message");

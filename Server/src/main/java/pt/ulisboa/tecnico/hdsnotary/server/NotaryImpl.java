@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
@@ -18,17 +17,10 @@ import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
-import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
 import java.security.SecureRandom;
-import java.security.Signature;
-import java.security.SignatureException;
-import java.security.UnrecoverableEntryException;
-import java.security.KeyStore.PrivateKeyEntry;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -36,6 +28,14 @@ import java.util.ArrayList;
 import java.util.Scanner;
 import java.util.TreeMap;
 
+import pt.gov.cartaodecidadao.PteidException;
+import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
+import pt.ulisboa.tecnico.hdsnotary.library.Good;
+import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
+import pt.ulisboa.tecnico.hdsnotary.library.Result;
+import pt.ulisboa.tecnico.hdsnotary.library.Transfer;
+import pteidlib.PTEID_Certif;
+import pteidlib.pteid;
 import sun.security.pkcs11.wrapper.CK_ATTRIBUTE;
 import sun.security.pkcs11.wrapper.CK_C_INITIALIZE_ARGS;
 import sun.security.pkcs11.wrapper.CK_MECHANISM;
@@ -43,11 +43,6 @@ import sun.security.pkcs11.wrapper.CK_SESSION_INFO;
 import sun.security.pkcs11.wrapper.PKCS11;
 import sun.security.pkcs11.wrapper.PKCS11Constants;
 import sun.security.pkcs11.wrapper.PKCS11Exception;
-import pt.gov.cartaodecidadao.PTEID_ID;
-import pt.gov.cartaodecidadao.PteidException;
-import pt.ulisboa.tecnico.hdsnotary.library.*;
-import pteidlib.PTEID_Certif;
-import pteidlib.pteid;
 
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
 
@@ -200,12 +195,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		System.out.println("------ STATE OF GOOD ------\nUser: " + userId + "\tGood: " + goodId);
 
 		String data = nounceList.get(userId) + cnounce + userId + goodId;
+		System.out.println("DATA: " + data);
 		try {
 			Good good;
 			if ((good = goodsList.get(goodId)) != null && cryptoUtils.verifySignature(userId, data, signature)) {
 				boolean status = goodsToSell.contains(goodId);
 				System.out.println("Result: " + good.getUserId() + "\nFor Sale: " + status + "\n");
-				return new Result(good.getUserId(), status, cnounce, cryptoUtils.signMessage(data + "true"));
+				return new Result(good.getUserId(), status, cnounce, cryptoUtils.signMessage(data + status));
 			}
 			return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
 		} catch (Exception e) {

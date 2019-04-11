@@ -88,20 +88,30 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		return nounce;
 	}
 	
+	public static String byteArrayToHex(byte[] a) {
+		   StringBuilder sb = new StringBuilder(a.length * 2);
+		   for(byte b: a)
+		      sb.append(String.format("%02x", b));
+		   return sb.toString();
+		}
+	
 	@Override
 	public Boolean buyGood(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
 
 		String nounceToNotary = cryptoUtils.generateCNounce();
-		String data = notary.getNounce(this.id) + cnounce + this.id + userId + goodId;
-		byte[] signedHashedData = cryptoUtils.signMessage(data);
+		String data = notary.getNounce(this.id) + nounceToNotary + this.id + userId + goodId;
 
-		Result result = notary.transferGood(this.getId(), userId, goodId, nounceToNotary, signedHashedData);
+		byte[] signature2 = cryptoUtils.signMessage(data);
+		System.out.println("Data: " + data);
+		
+		Result result = notary.transferGood(this.getId(), userId, goodId, nounceToNotary, signature2);
+		
 
-//		System.out.println("> " + data + result.getResult());
+		System.out.println("> " + data + result.getResult());
 
 		if (cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 			System.out.println("Signature verified! Notary confirmed buy good");
-			goods.put(goodId, false);
+			goods.remove(goodId);
 			return result.getResult();
 		}
 		else {

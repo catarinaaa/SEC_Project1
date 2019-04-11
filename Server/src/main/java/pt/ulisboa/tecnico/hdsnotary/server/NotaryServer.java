@@ -23,6 +23,7 @@ public class NotaryServer {
 			System.exit(0);
 
 		} catch (Exception e) {
+			System.err.println("ERROR, exiting!");
 			e.printStackTrace();
 			return;
 		}

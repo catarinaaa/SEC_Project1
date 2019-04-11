@@ -1,10 +1,6 @@
 package pt.ulisboa.tecnico.hdsnotary.library;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.math.BigInteger;
 import java.security.InvalidKeyException;
 import java.security.KeyStore;
@@ -26,6 +22,7 @@ public class CryptoUtilities {
 	
 	private static final String SIGNATURE_ALGORITHM = "SHA1withRSA";
 	private static final String DIGEST_ALGORITHM = "SHA-256";
+	private static final String NOTARY_CERT = "Server/storage/CertCC.p12";
 	
 	private SecureRandom secRandom = new SecureRandom();
 	
@@ -182,6 +179,37 @@ public class CryptoUtilities {
 			System.err.println("ERROR: Wrong algorithm in KeyStore");
 		}
 		return cert;
+	}
+
+	public void writeCertToKeyStore(X509Certificate cert) {
+		try {
+			String password = passwordsKeyStores.get("Notary");
+			KeyStore ks = KeyStore.getInstance("pkcs12");
+			KeyStore.ProtectionParameter protParam = new KeyStore.PasswordProtection(password.toCharArray());
+			FileOutputStream fos = new FileOutputStream(NOTARY_CERT);
+			ks.load(null, password.toCharArray());
+
+			ks.setCertificateEntry("CC", cert);
+
+			ks.store(fos, password.toCharArray());
+
+			if (fos != null) {
+				fos.close();
+			}
+		} catch (FileNotFoundException | CertificateException e) {
+			System.err.println("ERROR: Error writing to keyStore of Notary");
+			e.printStackTrace();
+			System.exit(1);
+		} catch (IOException e) {
+			System.err.println("ERROR: Wrong password of KeyStore");
+			System.exit(1);
+		} catch (NoSuchAlgorithmException e) {
+			System.err.println("ERROR: Wrong algorithm in KeyStore");
+			System.exit(1);
+		} catch (KeyStoreException e) {
+			System.err.println("ERROR: Error finding pkcs12");
+			e.printStackTrace();
+		}
 	}
 	
 	public String generateCNounce() {

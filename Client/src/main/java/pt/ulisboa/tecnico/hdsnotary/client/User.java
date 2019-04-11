@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsnotary.client;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
@@ -96,7 +97,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		}
 	
 	@Override
-	public Boolean buyGood(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
+	public Boolean buyGood(String userId, String goodId, String cnounce, byte[] signature) throws IOException {
 
 		String nounceToNotary = cryptoUtils.generateCNounce();
 		String data = notary.getNounce(this.id) + nounceToNotary + this.id + userId + goodId;
@@ -164,7 +165,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				
 				return false;
 			}
-		} catch (RemoteException e) {
+		} catch (IOException e) {
 			rebind();
 			return buying(goodId);
 		}
@@ -178,9 +179,14 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			Result result = notary.intentionToSell(this.id, goodId, cnounce, cryptoUtils.signMessage(data));
 			
 			if (result != null && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
-				System.out.println("Signature verified! Notary confirmed intention to sell");
-				goods.replace(goodId, true);
-				System.out.println("Result: " + goodId + " is now for sale");
+				if(result.getResult()) {
+					System.out.println("Signature verified! Notary confirmed intention to sell");
+					goods.replace(goodId, true);
+					System.out.println("Result: " + goodId + " is now for sale");
+				}
+				else {
+					System.out.println("Invalid Option --> Result is false");
+				}
 				return result.getResult();
 			}
 			else {

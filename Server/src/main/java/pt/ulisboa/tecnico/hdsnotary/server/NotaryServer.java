@@ -6,7 +6,7 @@ import java.rmi.registry.Registry;
 public class NotaryServer {
 
 	public static void main(String[] args) {
-		int port = 3000;
+		int port = 3001;
 
 		try {
 			NotaryImpl obj = NotaryImpl.getInstance();

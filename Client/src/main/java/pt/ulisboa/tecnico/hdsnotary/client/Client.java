@@ -1,30 +1,30 @@
 package pt.ulisboa.tecnico.hdsnotary.client;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
-import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.security.NoSuchAlgorithmException;
+import java.security.KeyStoreException;
 import java.util.Scanner;
 
-import pt.ulisboa.tecnico.hdsnotary.library.*;
+import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
 
 public class Client {
 	public static void main(String args[]) {
 
 		System.out.println("Initializing Client");
 
-		int PORT = 3000;
+		int PORT = 3001;
 
 		Scanner scanner = new Scanner(System.in);
 		System.out.println("Welcome");
-		int option;
 
 		User user = null;
         String name = "";
+        
+        Registry reg = null;
+        
 		try {
 
             NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
@@ -44,32 +44,36 @@ public class Client {
                     case 1:
                         user = new User("Alice", notary, "Bob", "Charlie");
                         name = "Alice";
-                        user.addGood(name+"1", false);
-                        user.addGood(name+"2", false);
+                        user.addGood("good1", false);
+                        user.addGood("good2", false);
                         break;
                     case 2:
                         user = new User("Bob", notary, "Alice", "Charlie");
                         name = "Bob";
-                        user.addGood(name+"1", false);
-                        user.addGood(name+"2", false);
+                        user.addGood("good3", false);
+                        user.addGood("good4", false);
                         break;
                     case 3:
                         user = new User("Charlie", notary, "Alice", "Bob");
                         name = "Charlie";
-                        user.addGood(name+"1", false);
-                        user.addGood(name+"2", false);
+                        user.addGood("good5", false);
+                        user.addGood("good6", false);
                         break;
                     default:
                         System.out.println("Invalid option!");
                 }
 
-                if(user!= null) break;
+                if(user!= null) {
+                	reg = LocateRegistry.getRegistry(PORT);
+    	            reg.rebind(name, user);
+                	break;
+                }
 	            
-	
-	            Registry reg = LocateRegistry.getRegistry(PORT);
-	            reg.rebind(name, user);
             }
-            while(true) {
+            
+            Boolean exit = true;
+            
+            while(exit) {
 
                 System.out.println("Choose one option:");
                 System.out.println("1 - List goods owned");
@@ -103,15 +107,13 @@ public class Client {
                     	break;
                     case 5:
                     	System.out.println("Goodbye!");
-                    	System.exit(0);
+                    	exit = false;
+                    	break;
                     default:
                     	System.out.println("Invalid option!");
                 }
             }
-
-
-
-
+            
 
 //            user.intentionSell("good2");
 //            System.out.println("Transfer > " + user.buyGood("user3", "good2"));
@@ -134,9 +136,16 @@ public class Client {
 
         
 		} catch (NotBoundException | IOException e) {
-            System.out.println("Error locating Notary");
-            e.printStackTrace();
+            System.out.println("ERROR locating Notary\n Exiting!");
+            scanner.close();
             return;
+	    } catch (KeyStoreException e) {
+	    	System.err.println("ERROR creating user, cryptoUtils error");
+	    	scanner.close();
+	    	return;
 	    }
+		
+		 scanner.close();
+         System.exit(0);
 	}
 }

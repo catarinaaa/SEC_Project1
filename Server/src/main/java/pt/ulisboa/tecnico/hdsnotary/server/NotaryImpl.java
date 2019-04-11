@@ -128,8 +128,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			while(count <= 5) {
 				try {
 					this.privateKey = getStoredKey();
+					break;
 				} catch (KeyStoreException e) {
-					System.out.println("ERROR: KeyStore load failed.\nInsert another password [default=Notary] to try again and press Enter");
+					System.out.println("Check if the right keyStore is in folder storage and press Enter");
 					scanner.nextLine();
 					count++;
 				} finally {
@@ -493,10 +494,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	    	throw new KeyStoreException();
 	    } catch(UnrecoverableEntryException | IOException e) {
 	    	System.err.println("ERROR: Wrong password of KeyStore");
-	    	System.exit(1);
+	    	throw new KeyStoreException();
 	    } catch(NoSuchAlgorithmException e) {
 	    	System.err.println("ERROR: Wrong algorithm in KeyStore");
-	    	System.exit(1);	    	
+	    	throw new KeyStoreException();   	
 	    }
 	    return priKey;
 	}

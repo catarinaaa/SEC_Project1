@@ -123,8 +123,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			createDatabases();
 
 			// Recovering list of goods to sell
-			inputSellings = new BufferedReader(new FileReader(sellingListFile));
-			outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
 			recoverSellingList();
 
 			// Recovering transactions from transactions file
@@ -281,6 +279,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void recoverSellingList() throws IOException {
+		inputSellings = new BufferedReader(new FileReader(sellingListFile));
+		outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
 		System.out.println("Recovering selling list");
 		String line;
 		while ((line = inputSellings.readLine()) != null) {
@@ -288,7 +288,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			System.out.println("GoodId: " + line);
 			goodsToSell.add(line);
 		}
-
+		inputSellings.close();
+		outputSellings.close();
 	}
 
 	private void recoverTransactions() throws IOException {
@@ -318,8 +319,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private void sellingListUpdate(String goodId) {
 		try {
+			outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
 			outputSellings.write(goodId + "\n");
 			outputSellings.flush();
+			outputSellings.close();
 		} catch (IOException e) {
 			System.err.println("ERROR: writing to SELLINGS file");
 		}
@@ -337,9 +340,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private void removeSelling(String goodId) throws IOException {
 		//Remover given goodId from selling list
 		File tempFile = new File(TEMPFILE);
-		System.out.println("REMOVING FROM LIST!!!!!");
 		System.out.println("I WANT TO REMOVE " + goodId);
 		String currentLine;
+		inputSellings = new BufferedReader(new FileReader(sellingListFile));
 		tempWriter = new BufferedWriter(new FileWriter(tempFile));
 		while ((currentLine = inputSellings.readLine()) != null) {
 			System.out.println("CURRENT LINE = " + currentLine);
@@ -348,8 +351,20 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		    if(trimmedLine.equals(goodId)) continue;
 		    tempWriter.write(currentLine + ("\n"));
 		}
-		tempWriter.close(); 
-		tempFile.renameTo(sellingListFile);
+		tempWriter.close();
+		inputSellings.close();
+		
+		if (!sellingListFile.delete()) {
+	        System.out.println("Could not delete file");
+	        //return;
+	      }
+
+		//Rename the temp file to the filename the original file had.
+		if (!tempFile.renameTo(sellingListFile))
+			System.out.println("Could not rename file");
+
+		
+		//tempFile.renameTo(sellingListFile);
 	}
 
 	private void printGoods() {

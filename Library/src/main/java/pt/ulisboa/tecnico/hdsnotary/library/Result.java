@@ -12,32 +12,32 @@ public class Result implements Serializable {
 	private String userId;
 	private Boolean result;
 	private Transfer transfer;
-	private String cnounce;
+	private String cnonce;
 	private byte[] signature;
 	
-	public Result(Boolean result, String cnounce, byte[] signature) {
+	public Result(Boolean result, String cnonce, byte[] signature) {
 		super();
 		this.userId = null;
 		this.result = result;
-		this.cnounce = cnounce;
+		this.cnonce = cnonce;
 		this.signature = signature;
 		this.transfer = null;
 	}
 	
-	public Result(Boolean result, Transfer transfer, String cnounce, byte[] signature) {
+	public Result(Boolean result, Transfer transfer, String cnonce, byte[] signature) {
 		super();
 		this.userId = null;
 		this.result = result;
-		this.cnounce = cnounce;
+		this.cnonce = cnonce;
 		this.signature = signature;
 		this.transfer = transfer;
 	}
 
-	public Result(String userId, Boolean result, String cnounce, byte[] signature) {
+	public Result(String userId, Boolean result, String cnonce, byte[] signature) {
 		super();
 		this.userId = userId;
 		this.result = result;
-		this.cnounce = cnounce;
+		this.cnonce = cnonce;
 		this.signature = signature;
 	}
 	
@@ -57,7 +57,7 @@ public class Result implements Serializable {
 		return transfer;
 	}
 
-	public String getCnounce() {
-		return cnounce;
+	public String getCnonce() {
+		return cnonce;
 	}
 }

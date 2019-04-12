@@ -211,7 +211,8 @@ public class CryptoUtilities {
 		}
 	}
 	
-	public String generateCNounce() {
+	public String generateCNonce() {
 		return new BigInteger(256, secRandom).toString();
 	}
+
 }

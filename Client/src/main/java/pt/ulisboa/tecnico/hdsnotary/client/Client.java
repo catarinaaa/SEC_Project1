@@ -98,17 +98,17 @@ public class Client {
                         user.listGoods();
                         break;
                     case 2:
-                    	System.out.println("Input good ID of good you wish to sell:");
+                    	System.out.println("----- INTENTION TO SELL -----\nInput good ID of good you wish to sell:");
                     	String goodId = scanner.next();
                     	user.intentionSell(goodId);
                     	break;
                     case 3:
-                    	System.out.println("Input good ID of good you wish to buy:");
+                    	System.out.println("------ BUYING -----\nInput good ID of good you wish to buy:");
                     	goodId = scanner.next();
                     	user.buying(goodId);
                     	break;
                     case 4:
-                    	System.out.println("Input good ID of good you wish to check state:");
+                    	System.out.println("----- STATE OF GOOD -----\nInput good ID of good you wish to check state:");
                     	goodId = scanner.next();
                     	user.stateOfGood(goodId);
                     	break;

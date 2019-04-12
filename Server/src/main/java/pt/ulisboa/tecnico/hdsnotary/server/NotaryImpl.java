@@ -66,8 +66,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	// List containing goods that are for sale
 	private ArrayList<String> goodsToSell = new ArrayList<String>();
 
-	// List containing nonces for security
-	private TreeMap<String, String> nonceList = new TreeMap<>();
+	// List containing nounces for security
+	private TreeMap<String, String> nounceList = new TreeMap<>();
 
 	private File transactionsFile = null;
 	private File sellingListFile = null;
@@ -123,6 +123,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			createDatabases();
 
 			// Recovering list of goods to sell
+			inputSellings = new BufferedReader(new FileReader(sellingListFile));
+			outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
 			recoverSellingList();
 
 			// Recovering transactions from transactions file
@@ -155,22 +157,22 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public String getNonce(String userId) throws RemoteException {
-		System.out.println("Generating nonce for user " + userId);
-		BigInteger nonce = new BigInteger(256, secRandom);
-		nonceList.put(userId, nonce.toString());
-		return nonce.toString();
+		System.out.println("Generating nounce for user " + userId);
+		String nonce = cryptoUtils.generateCNonce();
+		nounceList.put(userId, nonce);
+		return nonce;
 	}
 
 	/*
 	 * Invoked when a user wants to sell a particular good
 	 */
 	@Override
-	public Result intentionToSell(String userId, String goodId, String cnonce, byte[] signature)
+	public Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature)
 			throws RemoteException {
 		System.out.println("------ INTENTION TO SELL ------\n" + "User: " + userId + "\tGood: " + goodId);
 
 		Good good;
-		String data = nonceList.get(userId) + cnonce + userId + goodId;
+		String data = nounceList.get(userId) + cnounce + userId + goodId;
 
 		// verifies if good exists, user owns good, good is not already for sale and
 		// signature is valid
@@ -180,12 +182,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			sellingListUpdate(good.getGoodId());
 			System.out.println("Result: TRUE");
 			System.out.println("-------------------------------\n");
-			return new Result(true, cnonce, cryptoUtils.signMessage(data + "true"));
+			return new Result(true, cnounce, cryptoUtils.signMessage(data + "true"));
 		}
 
 		System.out.println("Result: FALSE");
 		System.out.println("-------------------------------\n");
-		return new Result(false, cnonce, cryptoUtils.signMessage(data + "false"));
+		return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
 
 	}
 
@@ -194,21 +196,21 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * current owner is
 	 */
 	@Override
-	public Result stateOfGood(String userId, String cnonce, String goodId, byte[] signature) throws RemoteException {
+	public Result stateOfGood(String userId, String cnounce, String goodId, byte[] signature) throws RemoteException {
 		System.out.println("------ STATE OF GOOD ------\nUser: " + userId + "\tGood: " + goodId);
 
-		String data = nonceList.get(userId) + cnonce + userId + goodId;
+		String data = nounceList.get(userId) + cnounce + userId + goodId;
 
 		Good good;
 		if ((good = goodsList.get(goodId)) != null && cryptoUtils.verifySignature(userId, data, signature)) {
 			boolean status = goodsToSell.contains(goodId);
 			System.out.println("Owner: " + good.getUserId() + "\nFor Sale: " + status);
 			System.out.println("---------------------------\n");
-			return new Result(good.getUserId(), status, cnonce, cryptoUtils.signMessage(data + status));
+			return new Result(good.getUserId(), status, cnounce, cryptoUtils.signMessage(data + status));
 		}
 		System.out.println("ERROR getting state of good");
 		System.out.println("---------------------------\n");
-		return new Result(false, cnonce, cryptoUtils.signMessage(data + "false"));
+		return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
 
 	}
 
@@ -217,14 +219,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * every parameter is correct
 	 */
 	@Override
-	public Result transferGood(String sellerId, String buyerId, String goodId, String cnonce, byte[] signature) throws IOException {
+	public Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature) throws IOException {
 		System.out.println("------ TRANSFER GOOD ------");
 
 		System.out.println("Seller: " + sellerId);
 		System.out.println("Buyer: " + buyerId);
 		System.out.println("Good: " + goodId);
 
-		String data = nonceList.get(sellerId) + cnonce + sellerId + buyerId + goodId;
+		String data = nounceList.get(sellerId) + cnounce + sellerId + buyerId + goodId;
 		Good good;
 
 		// verifies if the good exists, if the good is owned by the seller and if it is for sale, and if the signature
@@ -246,21 +248,21 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				System.out.println("Result: TRUE");
 				System.out.println("---------------------------");
 				printGoods();
-				return new Result(true, transfer, cnonce, cryptoUtils.signMessage(data + "true"));
+				return new Result(true, transfer, cnounce, cryptoUtils.signMessage(data + "true"));
 			} catch (UnsupportedEncodingException | PKCS11Exception e) {
 				System.err.println("ERROR: Signing with CC not possible");
 				System.out.println("Result: FALSE");
 				System.out.println("---------------------------");
 				printGoods();
 				e.printStackTrace();
-				return new Result(false, cnonce, cryptoUtils.signMessage(data + "false"));
+				return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
 			}
 
 		}
 		System.out.println("Result: NO");
 		System.out.println("---------------------------");
 		printGoods();
-		return new Result(false, cnonce, cryptoUtils.signMessage(data + "false"));
+		return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
 
 	}
 
@@ -279,8 +281,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void recoverSellingList() throws IOException {
-		inputSellings = new BufferedReader(new FileReader(sellingListFile));
-		outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
 		System.out.println("Recovering selling list");
 		String line;
 		while ((line = inputSellings.readLine()) != null) {
@@ -288,8 +288,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			System.out.println("GoodId: " + line);
 			goodsToSell.add(line);
 		}
-		inputSellings.close();
-		outputSellings.close();
+
 	}
 
 	private void recoverTransactions() throws IOException {
@@ -319,10 +318,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private void sellingListUpdate(String goodId) {
 		try {
-			outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
 			outputSellings.write(goodId + "\n");
 			outputSellings.flush();
-			outputSellings.close();
 		} catch (IOException e) {
 			System.err.println("ERROR: writing to SELLINGS file");
 		}
@@ -340,9 +337,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private void removeSelling(String goodId) throws IOException {
 		//Remover given goodId from selling list
 		File tempFile = new File(TEMPFILE);
+		System.out.println("REMOVING FROM LIST!!!!!");
 		System.out.println("I WANT TO REMOVE " + goodId);
 		String currentLine;
-		inputSellings = new BufferedReader(new FileReader(sellingListFile));
 		tempWriter = new BufferedWriter(new FileWriter(tempFile));
 		while ((currentLine = inputSellings.readLine()) != null) {
 			System.out.println("CURRENT LINE = " + currentLine);
@@ -351,20 +348,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		    if(trimmedLine.equals(goodId)) continue;
 		    tempWriter.write(currentLine + ("\n"));
 		}
-		tempWriter.close();
-		inputSellings.close();
-		
-		if (!sellingListFile.delete()) {
-	        System.out.println("Could not delete file");
-	        //return;
-	      }
-
-		//Rename the temp file to the filename the original file had.
-		if (!tempFile.renameTo(sellingListFile))
-			System.out.println("Could not rename file");
-
-		
-		//tempFile.renameTo(sellingListFile);
+		tempWriter.close(); 
+		tempFile.renameTo(sellingListFile);
 	}
 
 	private void printGoods() {

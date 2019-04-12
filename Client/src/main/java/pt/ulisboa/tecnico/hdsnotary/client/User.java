@@ -12,16 +12,14 @@ import java.security.KeyStoreException;
 import java.util.HashMap;
 import java.util.Map;
 
-import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
-import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
-import pt.ulisboa.tecnico.hdsnotary.library.Result;
-import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
+import pt.ulisboa.tecnico.hdsnotary.library.*;
 
 public class User extends UnicastRemoteObject implements UserInterface {
 
 	private static final long serialVersionUID = 1L;
 
 	private static final String NOTARY_ID = "Notary";
+	private static final String NOTARY_CC = "CertCC";
 
 	private final String id;
 	private final String user2;
@@ -97,34 +95,32 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	 * Invoked when another user is buying a good that this user owns
 	 */
 	@Override
-	public Boolean buyGood(String userId, String goodId, String cnonce, byte[] signature) {
+	public Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
 
 		try {
 
 			String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
 
 			if (!cryptoUtils.verifySignature(userId, toVerify, signature))
-				return false;
+				throw new TransferException("Error");
 
 
 			String nonceToNotary = cryptoUtils.generateCNonce();
 			String data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
 
-			byte[] signature2 = cryptoUtils.signMessage(data);
+			Transfer result = notary.transferGood(this.getId(), userId, goodId, nonceToNotary, cryptoUtils.signMessage(data));
 
-			Result result = notary.transferGood(this.getId(), userId, goodId, nonceToNotary, signature2);
+			String transferVerify = result.getId() + result.getBuyerId() + result.getSellerId() + result.getGoodId();
+			System.out.println("Verify: " + transferVerify);
 
-
-			if (result.getResult() && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
-				System.out.println("Signature verified! Notary confirmed buy good");
+			if (cryptoUtils.verifySignature(NOTARY_CC, transferVerify, result.getNotarySignature(), notary.getCertificate())) {
+				System.out.println("CC Signature verified! Notary confirmed buy good");
 				goods.remove(goodId);
-				return result.getResult();
-			} else if (!result.getResult()) {
-				System.out.println("Good cannot be sold");
-				return result.getResult();
-			} else {
-				System.err.println("ERROR: Signature does not verify");
-				return false;
+				return result;
+			}
+			else {
+				System.err.println("ERROR: CC Signature does not verify");
+				throw new TransferException("Error");
 			}
 		} catch (IOException e) {
 			rebind();
@@ -150,7 +146,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 					lookUpUsers();
 				}
 
-				Boolean result = false;
+				Transfer result;
 
 				if(seller.equals(user2) && remoteUser2 != null) {
 
@@ -168,23 +164,23 @@ public class User extends UnicastRemoteObject implements UserInterface {
 					result = remoteUser3.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
 				}
 
-				if(result) {
-					goods.put(goodId, false);
-					System.out.println("SUCCESSFUL BUY");
-					System.out.println(goodId + "was added to the list of goods!");
-					System.out.println("------------------");
-					return true;
-				} else {
-					System.out.println("ERROR: Buying was not possible!");
-					System.out.println("------------------");
-					return false;
-				}
+
+				goods.put(goodId, false);
+				System.out.println("SUCCESSFUL BUY");
+				System.out.println(goodId + " was added to the list of goods!");
+				System.out.println("------------------");
+				return true;
+
 
 			}
 
 		} catch (IOException e) {
 			rebind();
 			return buying(goodId);
+		}
+		catch (TransferException e) {
+			System.out.println("Buying not possible!");
+			return false;
 		}
 	}
 

@@ -2,6 +2,7 @@ Instructions:
 Below there are 5 different executions, one with normal execution and 4 with simulation of attacks.
 4 terminals should be open for executing the tests and the following commands should be introduced.
 
+Please, run ./clean.sh to clean all databases before runninng every test
 
 Simple demo:
 

@@ -34,4 +34,8 @@ public class Transfer implements Serializable {
 	public byte[] getNotarySignature() {
 		return notarySignature;
 	}	
+
+	public int getId() {
+		return this.id;
+	}
 }

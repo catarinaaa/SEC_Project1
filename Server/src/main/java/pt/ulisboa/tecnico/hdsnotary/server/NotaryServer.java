@@ -11,7 +11,7 @@ public class NotaryServer {
 		int port = 3000;
 
 		try {
-			NotaryImpl obj = NotaryImpl.getInstance(false);
+			NotaryImpl obj = NotaryImpl.getInstance(true);
 
 			reg = LocateRegistry.createRegistry(port);
 			reg.rebind("Notary", obj);
@@ -25,6 +25,7 @@ public class NotaryServer {
 			System.out.println("Awaiting connections");
 			System.out.println("Press enter to shutdown");
 			System.in.read();
+			obj.stop();
 			System.out.println("Server terminated");
 			System.exit(0);
 

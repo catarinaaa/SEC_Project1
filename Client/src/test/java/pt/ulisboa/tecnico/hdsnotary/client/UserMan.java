@@ -12,16 +12,14 @@ import java.security.KeyStoreException;
 import java.util.HashMap;
 import java.util.Map;
 
-import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
-import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
-import pt.ulisboa.tecnico.hdsnotary.library.Result;
-import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
+import pt.ulisboa.tecnico.hdsnotary.library.*;
 
 public class UserMan extends UnicastRemoteObject implements UserInterface {
 
 	private static final long serialVersionUID = 1L;
 
 	private static final String NOTARY_ID = "Notary";
+	private static final String NOTARY_CC = "CertCC";
 
 	private final String id;
 	private final String user2;
@@ -38,7 +36,7 @@ public class UserMan extends UnicastRemoteObject implements UserInterface {
 
 	CryptoUtilities cryptoUtils;
 
-	private Map<String, String> nounceList = new HashMap<>();
+	private Map<String, String> nonceList = new HashMap<>();
 
 	public UserMan(String id, NotaryInterface notary, String user2, String user3)
 			throws RemoteException, KeyStoreException {
@@ -87,7 +85,7 @@ public class UserMan extends UnicastRemoteObject implements UserInterface {
 	public String getNonce(String userId, byte[] signature) {
 
 		String nonce = cryptoUtils.generateCNonce();
-		nounceList.put(userId, nonce);
+		nonceList.put(userId, nonce);
 		return nonce;
 	}
 
@@ -99,34 +97,36 @@ public class UserMan extends UnicastRemoteObject implements UserInterface {
 	}
 
 	@Override
-	public Boolean buyGood(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
+	public Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
 		try {
-			String nounceToNotary = cryptoUtils.generateCNonce();
-			String data = notary.getNonce(this.id) + nounceToNotary + this.id + userId + goodId;
+			String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
+
+			if (!cryptoUtils.verifySignature(userId, toVerify, signature))
+				throw new TransferException("Error");
+
+
+			String nonceToNotary = cryptoUtils.generateCNonce();
+			String data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + "good4";
 
 			byte[] signature2 = cryptoUtils.signMessage(data);
-			System.out.println("Data: " + data);
-			System.out.println("Attacking... Buying good4");
-			// change goodId to "good4"
-			Result result = notary.transferGood(this.getId(), userId, "good4", nounceToNotary, signature2);
+			System.out.println("Attacking... Attacking good4");
+			Transfer result = notary.transferGood(this.getId(), userId, "good4", nonceToNotary, signature2);
 
+			String transferVerify = result.getId() + result.getBuyerId() + result.getSellerId() + result.getGoodId();
 
-			if (result.getResult()
-					&& cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
-				System.out.println("Signature verified! Notary confirmed buy good");
+			if (cryptoUtils.verifySignature(NOTARY_CC, transferVerify, result.getNotarySignature())) {
+				System.out.println("CC Signature verified! Notary confirmed buy good");
 				goods.remove(goodId);
-				return result.getResult();
-			} else if (!result.getResult()) {
-				System.out.println("Good cannot be sold");
-				return result.getResult();
-			} else {
+				return result;
+			}
+			else {
 				System.err.println("ERROR: Signature does not verify");
-				return false;
+				throw new TransferException("Error");
 			}
 		}
 		catch(IOException e) {
 			rebind();
-			return buyGood(userId, goodId, cnounce, signature);
+			return buyGood(userId, goodId, cnonce, signature);
 		}
 	}
 
@@ -134,42 +134,52 @@ public class UserMan extends UnicastRemoteObject implements UserInterface {
 		try {
 			Result stateOfGood = stateOfGood(goodId);
 			if (stateOfGood == null || false == stateOfGood.getResult()) {
-				System.out.println("Good is not up for sale");
+				System.out.println("ERROR: Buying was not possible!");
+				System.out.println("------------------");
 				return false;
-			} else {
+			}
+			else {
 				String seller = stateOfGood.getUserId();
 
-				if (remoteUser2 == null || remoteUser3 == null) {
+				if(remoteUser2 == null || remoteUser3 == null) {
 					lookUpUsers();
 				}
 
-				Boolean result = false;
+				Transfer result;
 
-				if (seller.equals(user2) && remoteUser2 != null) {
+				if(seller.equals(user2) && remoteUser2 != null) {
 
-					String nounce = remoteUser2.getNonce(this.id, cryptoUtils.signMessage(this.id));
-					String cnounce = cryptoUtils.generateCNonce();
-					nounceList.put(user2, cnounce);
-					String toSign = nounce + cnounce + this.id + goodId;
-					result = remoteUser2.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
-				} else if (seller.equals(user3) && remoteUser3 != null) {
-					String nounce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
-					String cnounce = cryptoUtils.generateCNonce();
-					nounceList.put(user3, cnounce);
-					String toSign = nounce + cnounce + this.id + goodId;
-					result = remoteUser3.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+					String nonce = remoteUser2.getNonce(this.id, cryptoUtils.signMessage(this.id));
+					String cnonce = cryptoUtils.generateCNonce();
+					nonceList.put(user2, cnonce);
+					String toSign = nonce + cnonce + this.id + goodId;
+					result = remoteUser2.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
+				}
+				else if(seller.equals(user3) && remoteUser3 != null) {
+					String nonce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
+					String cnonce = cryptoUtils.generateCNonce();
+					nonceList.put(user3, cnonce);
+					String toSign = nonce + cnonce + this.id + goodId;
+					result = remoteUser3.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
 				}
 
-				if (result) {
-					goods.put(goodId, false);
-					System.out.println(goodId + "was add to the list of goods!");
-				}
 
-				return false;
+				goods.put(goodId, false);
+				System.out.println("SUCCESSFUL BUY");
+				System.out.println(goodId + " was added to the list of goods!");
+				System.out.println("------------------");
+				return true;
+
+
 			}
+
 		} catch (IOException e) {
 			rebind();
 			return buying(goodId);
+		}
+		catch (TransferException e) {
+			System.out.println("Buying not possible!");
+			return false;
 		}
 	}
 

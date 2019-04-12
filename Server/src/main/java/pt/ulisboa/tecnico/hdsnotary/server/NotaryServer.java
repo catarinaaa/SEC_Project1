@@ -5,14 +5,20 @@ import java.rmi.registry.Registry;
 
 public class NotaryServer {
 
+	private static Registry reg;
+
 	public static void main(String[] args) {
 		int port = 3000;
 
 		try {
 			NotaryImpl obj = NotaryImpl.getInstance(false);
 
-			Registry reg = LocateRegistry.createRegistry(port);
+			reg = LocateRegistry.createRegistry(port);
 			reg.rebind("Notary", obj);
+
+			for (String s : reg.list()) {
+				System.out.println("> " + s);
+			}
 			
 			System.out.println("Server ready!");
 

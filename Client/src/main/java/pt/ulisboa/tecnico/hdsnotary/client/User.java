@@ -129,7 +129,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	 */
 	public boolean buying(String goodId) {
 		try {
-			System.out.println("----- BUYING -----");
 			Result stateOfGood = stateOfGood(goodId);
 			if (stateOfGood == null || false == stateOfGood.getResult()) {
 				System.out.println("ERROR: Buying was not possible!");
@@ -187,7 +186,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 	public boolean intentionSell(String goodId) {
 		try {
-			System.out.println("----- INTENTION TO SELL -----");
 			String nounce = notary.getNounce(this.id);
 			String cnounce = cryptoUtils.generateCNounce();
 			String data = nounce + cnounce + this.id + goodId;
@@ -220,7 +218,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	 */
 	public Result stateOfGood(String goodId) {
 		try {
-			System.out.println("----- STATE OF GOOD -----");
 
 			String cnounce = cryptoUtils.generateCNounce();
 			String data = notary.getNounce(this.id) + cnounce + this.id + goodId;

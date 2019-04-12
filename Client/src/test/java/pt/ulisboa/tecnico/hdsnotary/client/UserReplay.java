@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsnotary.client;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
@@ -40,7 +41,7 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 	
 	private Map<String, String> nounceList = new HashMap<>();
 
-	public User(String id, NotaryInterface notary, String user2, String user3) throws RemoteException, KeyStoreException {
+	public UserReplay(String id, NotaryInterface notary, String user2, String user3) throws RemoteException, KeyStoreException {
 
 		this.id = id;
 		this.notary = notary;
@@ -81,9 +82,9 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 	}
 
 	@Override
-	public String getNounce(String userId, byte[] signature) {
+	public String getNonce(String userId, byte[] signature) {
 		
-		String nounce = cryptoUtils.generateCNounce();
+		String nounce = cryptoUtils.generateCNonce();
 		nounceList.put(userId, nounce);
 		return nounce;
 	}
@@ -96,19 +97,16 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 		}
 	
 	@Override
-	public Boolean buyGood(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException {
+	public Boolean buyGood(String userId, String goodId, String cnounce, byte[] signature) throws IOException {
 
-		String nounceToNotary = cryptoUtils.generateCNounce();
-		String data = notary.getNounce(this.id) + nounceToNotary + this.id + userId + goodId;
+		String nounceToNotary = cryptoUtils.generateCNonce();
+		String data = notary.getNonce(this.id) + nounceToNotary + this.id + userId + goodId;
 
 		byte[] signature2 = cryptoUtils.signMessage(data);
-		System.out.println("Data: " + data);
-		
+
 		Result result = notary.transferGood(this.getId(), userId, goodId, nounceToNotary, signature2);
 		
 
-		System.out.println("> " + data + result.getResult());
-		
 		if (result.getResult() && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 			System.out.println("Signature verified! Notary confirmed buy good");
 			goods.remove(goodId);
@@ -141,16 +139,16 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 				
 				if(seller.equals(user2) && remoteUser2 != null) {
 					
-					String nounce = remoteUser2.getNounce(this.id, cryptoUtils.signMessage(this.id));
-					String cnounce = cryptoUtils.generateCNounce();
+					String nounce = remoteUser2.getNonce(this.id, cryptoUtils.signMessage(this.id));
+					String cnounce = cryptoUtils.generateCNonce();
 					nounceList.put(user2, cnounce);
 					String toSign = nounce + cnounce + this.id + goodId;
 					result = remoteUser2.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
 					result = remoteUser2.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
 				}
 				else if(seller.equals(user3) && remoteUser3 != null) {
-					String nounce = remoteUser3.getNounce(this.id, cryptoUtils.signMessage(this.id));
-					String cnounce = cryptoUtils.generateCNounce();
+					String nounce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
+					String cnounce = cryptoUtils.generateCNonce();
 					nounceList.put(user3, cnounce);
 					String toSign = nounce + cnounce + this.id + goodId;
 					result = remoteUser3.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
@@ -166,7 +164,7 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 				
 				return false;
 			}
-		} catch (RemoteException e) {
+		} catch (IOException e) {
 			rebind();
 			return buying(goodId);
 		}
@@ -174,8 +172,8 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 
 	public boolean intentionSell(String goodId) {
 		try {
-			String nounce = notary.getNounce(this.id);
-			String cnounce = cryptoUtils.generateCNounce();
+			String nounce = notary.getNonce(this.id);
+			String cnounce = cryptoUtils.generateCNonce();
 			String data = nounce + cnounce + this.id + goodId;
 			Result result = notary.intentionToSell(this.id, goodId, cnounce, cryptoUtils.signMessage(data));
 			
@@ -197,8 +195,8 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 	
 	public Result stateOfGood(String goodId) {
 		try {
-			String cnounce = cryptoUtils.generateCNounce();
-			String data = notary.getNounce(this.id) + cnounce + this.id + goodId;
+			String cnounce = cryptoUtils.generateCNonce();
+			String data = notary.getNonce(this.id) + cnounce + this.id + goodId;
 			
 			System.out.println("DATA: " + data);
 	

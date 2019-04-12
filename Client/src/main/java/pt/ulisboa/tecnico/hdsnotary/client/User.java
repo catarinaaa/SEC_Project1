@@ -18,7 +18,7 @@ import pt.ulisboa.tecnico.hdsnotary.library.Result;
 import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
 
 public class User extends UnicastRemoteObject implements UserInterface {
-	
+
 	private static final long serialVersionUID = 1L;
 
 	private static final String NOTARY_ID = "Notary";
@@ -33,12 +33,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	// Instance of remote Notary Object
 	private NotaryInterface notary = null;
 
-	
+
 	private String keysPath; // KeyStore location
 	private String password; // KeyStore password
-	
+
 	CryptoUtilities cryptoUtils;
-	
+
 	private Map<String, String> nonceList = new HashMap<>();
 
 	public User(String id, NotaryInterface notary, String user2, String user3) throws RemoteException, KeyStoreException {
@@ -49,14 +49,14 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		this.user3 = user3;
 
 		goods = new HashMap<String, Boolean>();
-		
+
 		this.keysPath = "Client/storage/" + id + ".p12";
 		this.password = id + "1234";
 
 		goods = new HashMap<String, Boolean>();
 
 		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password);
-		
+
 		System.out.println("Initializing user " + id);
 
 	}
@@ -76,7 +76,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	public Map<String, Boolean> getGoods() {
 		return goods;
 	}
-	
+
 	public void addGood(String goodId, boolean bool) {
 		goods.put(goodId, bool);
 	}
@@ -87,7 +87,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	 */
 	@Override
 	public String getNonce(String userId, byte[] signature) {
-		
+
 		String nonce = cryptoUtils.generateCNonce();
 		nonceList.put(userId, nonce);
 		return nonce;
@@ -97,30 +97,38 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	 * Invoked when another user is buying a good that this user owns
 	 */
 	@Override
-	public Boolean buyGood(String userId, String goodId, String cnonce, byte[] signature) throws IOException {
+	public Boolean buyGood(String userId, String goodId, String cnonce, byte[] signature) {
 
-		String nonceToNotary = cryptoUtils.generateCNonce();
-		String data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
+		try {
 
-		byte[] signature2 = cryptoUtils.signMessage(data);
-		System.out.println("Data: " + data);
-		
-		Result result = notary.transferGood(this.getId(), userId, goodId, nonceToNotary, signature2);
-		
+			String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
 
-		System.out.println("> " + data + result.getResult());
-		
-		if (result.getResult() && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
-			System.out.println("Signature verified! Notary confirmed buy good");
-			goods.remove(goodId);
-			return result.getResult();
-		} else if(!result.getResult()) {
-			System.out.println("Good cannot be sold");
-			return result.getResult();
-		}
-		else {
-			System.err.println("ERROR: Signature does not verify");
-			return false;
+			if (!cryptoUtils.verifySignature(userId, toVerify, signature))
+				return false;
+
+
+			String nonceToNotary = cryptoUtils.generateCNonce();
+			String data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
+
+			byte[] signature2 = cryptoUtils.signMessage(data);
+
+			Result result = notary.transferGood(this.getId(), userId, goodId, nonceToNotary, signature2);
+
+
+			if (result.getResult() && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
+				System.out.println("Signature verified! Notary confirmed buy good");
+				goods.remove(goodId);
+				return result.getResult();
+			} else if (!result.getResult()) {
+				System.out.println("Good cannot be sold");
+				return result.getResult();
+			} else {
+				System.err.println("ERROR: Signature does not verify");
+				return false;
+			}
+		} catch (IOException e) {
+			rebind();
+			return buyGood(userId, goodId, cnonce, signature);
 		}
 	}
 
@@ -137,15 +145,15 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			}
 			else {
 				String seller = stateOfGood.getUserId();
-				
+
 				if(remoteUser2 == null || remoteUser3 == null) {
 					lookUpUsers();
 				}
-				
+
 				Boolean result = false;
-				
+
 				if(seller.equals(user2) && remoteUser2 != null) {
-					
+
 					String nonce = remoteUser2.getNonce(this.id, cryptoUtils.signMessage(this.id));
 					String cnonce = cryptoUtils.generateCNonce();
 					nonceList.put(user2, cnonce);
@@ -159,7 +167,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 					String toSign = nonce + cnonce + this.id + goodId;
 					result = remoteUser3.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
 				}
-				
+
 				if(result) {
 					goods.put(goodId, false);
 					System.out.println("SUCCESSFUL BUY");
@@ -190,7 +198,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			String cnonce = cryptoUtils.generateCNonce();
 			String data = nonce + cnonce + this.id + goodId;
 			Result result = notary.intentionToSell(this.id, goodId, cnonce, cryptoUtils.signMessage(data));
-			
+
 			if (result != null && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 				if(result.getResult()) {
 					goods.replace(goodId, true);
@@ -221,9 +229,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 			String cnonce = cryptoUtils.generateCNonce();
 			String data = notary.getNonce(this.id) + cnonce + this.id + goodId;
-			
+
 			Result result = notary.stateOfGood(this.getId(), cnonce, goodId, cryptoUtils.signMessage(data));
-	
+
 			if (cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
 				System.out.println("Owner: " + result.getUserId());
 				System.out.println("For sale: " + result.getResult());
@@ -261,7 +269,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		for (String goodId: goods.keySet()){
 			Boolean value = goods.get(goodId);
             System.out.println(goodId + " --> For sale: " + value);
-		} 
+		}
 	}
 
 	/*

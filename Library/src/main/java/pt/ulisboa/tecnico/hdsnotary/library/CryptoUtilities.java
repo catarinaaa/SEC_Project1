@@ -157,7 +157,6 @@ public class CryptoUtilities {
 		// Load KeyStore
 		String password = passwordsKeyStores.get(userId);
 		String certPath = certPathsList.get(userId);
-		System.out.println("Password " + userId +" > " + password);
 		KeyStore ks = KeyStore.getInstance("pkcs12");
 		FileInputStream fis = null;
 		X509Certificate cert = null;

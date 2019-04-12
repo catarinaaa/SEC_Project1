@@ -11,7 +11,7 @@ import java.util.Scanner;
 
 import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
 
-public class Client {
+public class TestManClient {
 	public static void main(String args[]) {
 
 		System.out.println("Initializing Client");
@@ -21,61 +21,59 @@ public class Client {
 		Scanner scanner = new Scanner(System.in);
 		System.out.println("************* WELCOME *************");
 
-		User user = null;
         String name = "";
         
         Registry reg = null;
-        
-		try {
-			
+        try {
 			reg = LocateRegistry.getRegistry(PORT);
 			
 			for(String s : reg.list()) {
 				System.out.println("Name > " + s);
 			}
+	
+	        NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
+	        UserMan user = null;
 
-            NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
-
-            while (true) {
-            	if(args.length ==0) {
+        	while (true) {
+	        	if(args.length ==0) {
 	                System.out.println("Choose one user to create:");
 	                System.out.println("1 - Alice");
 	                System.out.println("2 - Bob");
-	                System.out.println("3 - Charlie");
-            	
+	                System.out.println("3 - Carlos");
+	        	
+	
+	            while(!scanner.hasNextInt())
+	                scanner.next();
+        	}
+            switch ((args.length > 0) ? Integer.parseInt(args[0]) : scanner.nextInt()) {
+                case 1:
+                    user = new UserMan("Alice", notary, "Bob", "Charlie");
+                    name = "Alice";
+                    user.addGood("good1", false);
+                    user.addGood("good2", false);
+                    break;
+                case 2:
+                    user = new UserMan("Bob", notary, "Alice", "Charlie");
+                    name = "Bob";
+                    user.addGood("good3", false);
+                    user.addGood("good4", false);
+                    break;
+                case 3:
+                    user = new UserMan("Charlie", notary, "Alice", "Bob");
+                    name = "Charlie";
+                    user.addGood("good5", false);
+                    user.addGood("good6", false);
+                    break;
+                default:
+                    System.out.println("Invalid option!");
+            }
 
-                while(!scanner.hasNextInt())
-                    scanner.next();
-            	}
-                switch ((args.length > 0) ? Integer.parseInt(args[0]) : scanner.nextInt()) {
-                    case 1:
-                        user = new User("Alice", notary, "Bob", "Charlie");
-                        name = "Alice";
-                        user.addGood("good1", false);
-                        user.addGood("good2", false);
-                        break;
-                    case 2:
-                        user = new User("Bob", notary, "Alice", "Charlie");
-                        name = "Bob";
-                        user.addGood("good3", false);
-                        user.addGood("good4", false);
-                        break;
-                    case 3:
-                        user = new User("Charlie", notary, "Alice", "Bob");
-                        name = "Charlie";
-                        user.addGood("good5", false);
-                        user.addGood("good6", false);
-                        break;
-                    default:
-                        System.out.println("Invalid option!");
-                }
-
-                if(user!= null) {
-                	reg = LocateRegistry.getRegistry(PORT);
-    	            reg.rebind(name, user);
-                	break;
-                }
-	            
+            if(user!=null) {
+	            reg = LocateRegistry.getRegistry(PORT);
+		        reg.rebind(name, user);
+		        break;
+            }
+	        
             }
             
             Boolean exit = true;
@@ -98,17 +96,17 @@ public class Client {
                         user.listGoods();
                         break;
                     case 2:
-                    	System.out.println("Input good ID of good you wish to sell:");
+                    	System.out.println("------ INTENTION TO SELL ------\nInput good ID of good you wish to sell:");
                     	String goodId = scanner.next();
                     	user.intentionSell(goodId);
                     	break;
                     case 3:
-                    	System.out.println("Input good ID of good you wish to buy:");
+                    	System.out.println("------ BUY GOOD ------\nInput good ID of good you wish to buy:");
                     	goodId = scanner.next();
                     	user.buying(goodId);
                     	break;
                     case 4:
-                    	System.out.println("Input good ID of good you wish to check state:");
+                    	System.out.println("------ GET STATE OF GOOD ------\nInput good ID of good you wish to check state:");
                     	goodId = scanner.next();
                     	user.stateOfGood(goodId);
                     	break;

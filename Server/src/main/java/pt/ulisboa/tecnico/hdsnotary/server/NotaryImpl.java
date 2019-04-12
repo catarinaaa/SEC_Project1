@@ -53,6 +53,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private final static String certPath = "Server/storage/CertCC.p12";
 	private final static String TRANSACTIONSPATH = "Server/storage/transactions.txt";
 	private final static String SELLINGLISTPATH = "Server/storage/selling.txt";
+	private final static String TEMPFILE = "Server/storage/temp.txt";
 
 	// Singleton
 	private static NotaryImpl instance = null;
@@ -74,6 +75,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private BufferedWriter outputTransactions = null;
 	private BufferedReader inputSellings = null;
 	private BufferedWriter outputSellings = null;
+	private BufferedWriter tempWriter = null;
 	private int transferId = 1;
 
 	// CC
@@ -124,13 +126,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			inputSellings = new BufferedReader(new FileReader(sellingListFile));
 			outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
 			recoverSellingList();
-			printSellingList();
 
 			// Recovering transactions from transactions file
 			inputTransactions = new BufferedReader(new FileReader(transactionsFile));
 			outputTransactions = new BufferedWriter(new FileWriter(transactionsFile, true));
 			recoverTransactions();
-			printGoods();
 
 		} catch (IOException e) {
 			System.err.println("ERROR: Creation of databases failed. Aborting...");
@@ -139,10 +139,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 	}
 
-	public static NotaryImpl getInstance() throws KeyStoreException {
+	public static NotaryImpl getInstance(boolean useCC) throws KeyStoreException {
 		if (instance == null) {
 			try {
-				instance = new NotaryImpl(false);
+				instance = new NotaryImpl(useCC);
 			} catch (RemoteException e) {
 				e.printStackTrace();
 				System.exit(1);
@@ -179,7 +179,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(userId)
 				&& !goodsToSell.contains(good.getGoodId()) && cryptoUtils.verifySignature(userId, data, signature)) {
 			goodsToSell.add(good.getGoodId());
-			sellingListUpdate(userId, good.getGoodId());
+			sellingListUpdate(good.getGoodId());
 			System.out.println("Result: TRUE");
 			System.out.println("-------------------------------\n");
 			return new Result(true, cnounce, cryptoUtils.signMessage(data + "true"));
@@ -219,8 +219,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * every parameter is correct
 	 */
 	@Override
-	public Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature)
-			throws RemoteException {
+	public Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature) throws IOException {
 		System.out.println("------ TRANSFER GOOD ------");
 
 		System.out.println("Seller: " + sellerId);
@@ -240,6 +239,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			goodsList.put(goodId, good);
 			goodsToSell.remove(goodId);
 			saveTransfer(sellerId, buyerId, goodId);
+			removeSelling(goodId);
+			
 			// Sign transfer with Cartao Do Cidadao
 			try {
 				Transfer transfer = new Transfer(transferId++, buyerId, sellerId, goodId,
@@ -282,12 +283,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private void recoverSellingList() throws IOException {
 		System.out.println("Recovering selling list");
 		String line;
-		String[] splitLine;
 		while ((line = inputSellings.readLine()) != null) {
 			System.out.println("--> " + line);
-			splitLine = line.split(";");
-			System.out.println("Seller: " + splitLine[0] + " GoodId: " + splitLine[1]);
-			goodsToSell.add(splitLine[1]);
+			System.out.println("GoodId: " + line);
+			goodsToSell.add(line);
 		}
 
 	}
@@ -317,9 +316,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 	}
 
-	private void sellingListUpdate(String sellerId, String goodId) {
+	private void sellingListUpdate(String goodId) {
 		try {
-			outputSellings.write(sellerId + ";" + goodId + "\n");
+			outputSellings.write(goodId + "\n");
 			outputSellings.flush();
 		} catch (IOException e) {
 			System.err.println("ERROR: writing to SELLINGS file");
@@ -333,7 +332,24 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		goodsList.put("good4", new Good("Bob", "good4"));
 		goodsList.put("good5", new Good("Charlie", "good5"));
 		goodsList.put("good6", new Good("Charlie", "good6"));
-
+	}
+	
+	private void removeSelling(String goodId) throws IOException {
+		//Remover given goodId from selling list
+		File tempFile = new File(TEMPFILE);
+		System.out.println("REMOVING FROM LIST!!!!!");
+		System.out.println("I WANT TO REMOVE " + goodId);
+		String currentLine;
+		tempWriter = new BufferedWriter(new FileWriter(tempFile));
+		while ((currentLine = inputSellings.readLine()) != null) {
+			System.out.println("CURRENT LINE = " + currentLine);
+		    // trim newline when comparing with lineToRemove
+		    String trimmedLine = currentLine.trim();
+		    if(trimmedLine.equals(goodId)) continue;
+		    tempWriter.write(currentLine + ("\n"));
+		}
+		tempWriter.close(); 
+		tempFile.renameTo(sellingListFile);
 	}
 
 	private void printGoods() {

@@ -3,6 +3,7 @@ package pt.ulisboa.tecnico.hdsnotary.library;
 import java.io.IOException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import java.security.cert.X509Certificate;
 
 public interface NotaryInterface extends Remote {
 
@@ -12,7 +13,8 @@ public interface NotaryInterface extends Remote {
 
 	Result stateOfGood(String userId, String cnonce, String goodId, byte[] signature) throws RemoteException;
 
-	Result transferGood(String sellerId, String buyerId, String goodId, String cnonce, byte[] signature)
-			throws RemoteException, IOException;
+	Transfer transferGood(String sellerId, String buyerId, String goodId, String cnonce, byte[] signature)
+            throws RemoteException, IOException, TransferException;
 
+	X509Certificate getCertificate() throws RemoteException;
 }

@@ -2,6 +2,7 @@ package pt.ulisboa.tecnico.hdsnotary.library;
 
 import java.io.*;
 import java.math.BigInteger;
+import java.nio.charset.Charset;
 import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -20,10 +21,8 @@ import java.util.Scanner;
 
 public class CryptoUtilities {
 	
-	private static final String SIGNATURE_ALGORITHM = "SHA1withRSA";
-	private static final String DIGEST_ALGORITHM = "SHA-256";
-	private static final String NOTARY_CERT = "Server/storage/CertCC.p12";
-	
+	private static final String SIGNATURE_ALGORITHM = "SHA256withRSA";
+
 	private SecureRandom secRandom = new SecureRandom();
 	
 	private PrivateKey privateKey;
@@ -45,10 +44,12 @@ public class CryptoUtilities {
 		this.passwordsKeyStores.put("Bob", "Bob1234");
 		this.passwordsKeyStores.put("Charlie", "Charlie1234");
 		this.passwordsKeyStores.put("Notary", "Notary");
+		this.passwordsKeyStores.put("CertCC", "Notary");
 		this.certPathsList.put("Alice", "Client/storage/Alice.p12");
 		this.certPathsList.put("Bob", "Client/storage/Bob.p12");
 		this.certPathsList.put("Charlie", "Client/storage/Charlie.p12");
 		this.certPathsList.put("Notary", "Server/storage/Notary.p12");
+		this.certPathsList.put("CertCC", "Server/storage/CertCC.p12");
 		
 		int count = 0;
 		while(count <= 5) {
@@ -71,15 +72,23 @@ public class CryptoUtilities {
 		
 		this.privateKey = getStoredKey();
 	}
-	
+
 	public boolean verifySignature(String id, String toVerify, byte[] signature) {
+		return verifySignature(id, toVerify, signature, null);
+	}
+
+
+	public boolean verifySignature(String id, String toVerify, byte[] signature, X509Certificate cert) {
 		try {
 
 			Signature sig = Signature.getInstance(SIGNATURE_ALGORITHM);
-			sig.initVerify(getStoredCert(id));
 
-			byte[] hashedMsg = hashMessage(toVerify);
-			sig.update(hashedMsg);
+			if(cert == null)
+				sig.initVerify(getStoredCert(id));
+			else
+				sig.initVerify(cert);
+
+			sig.update(toVerify.getBytes(Charset.forName("UTF-8")));
 			if (sig.verify(signature)) {
 				return true;
 			}
@@ -95,27 +104,13 @@ public class CryptoUtilities {
 			return false;
 		}
 	}
-	
-	private byte[] hashMessage(String msg) {
-		MessageDigest digest;
-		try {
-			digest = MessageDigest.getInstance(DIGEST_ALGORITHM);
-			return digest.digest(msg.getBytes("UTF-8"));
-		} catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return null;
-		}
-
-	}
 
 	public byte[] signMessage(String msg) {
-		byte[] array = hashMessage(msg);
 		Signature rsaForSign;
 		try {
 			rsaForSign = Signature.getInstance(SIGNATURE_ALGORITHM);
 			rsaForSign.initSign(privateKey);
-			rsaForSign.update(array);
+			rsaForSign.update(msg.getBytes(Charset.forName("UTF-8")));
 			return rsaForSign.sign();
 		} catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
 			// TODO Auto-generated catch block
@@ -154,9 +149,11 @@ public class CryptoUtilities {
 
 	// Gets notary certificate
 	public X509Certificate getStoredCert(String userId) throws KeyStoreException {
+
 		// Load KeyStore
 		String password = passwordsKeyStores.get(userId);
 		String certPath = certPathsList.get(userId);
+
 		KeyStore ks = KeyStore.getInstance("pkcs12");
 		FileInputStream fis = null;
 		X509Certificate cert = null;
@@ -177,38 +174,8 @@ public class CryptoUtilities {
 		} catch (NoSuchAlgorithmException e) {
 			System.err.println("ERROR: Wrong algorithm in KeyStore");
 		}
+
 		return cert;
-	}
-
-	public void writeCertToKeyStore(X509Certificate cert) {
-		try {
-			String password = passwordsKeyStores.get("Notary");
-			KeyStore ks = KeyStore.getInstance("pkcs12");
-			KeyStore.ProtectionParameter protParam = new KeyStore.PasswordProtection(password.toCharArray());
-			FileOutputStream fos = new FileOutputStream(NOTARY_CERT);
-			ks.load(null, password.toCharArray());
-
-			ks.setCertificateEntry("CC", cert);
-
-			ks.store(fos, password.toCharArray());
-
-			if (fos != null) {
-				fos.close();
-			}
-		} catch (FileNotFoundException | CertificateException e) {
-			System.err.println("ERROR: Error writing to keyStore of Notary");
-			e.printStackTrace();
-			System.exit(1);
-		} catch (IOException e) {
-			System.err.println("ERROR: Wrong password of KeyStore");
-			System.exit(1);
-		} catch (NoSuchAlgorithmException e) {
-			System.err.println("ERROR: Wrong algorithm in KeyStore");
-			System.exit(1);
-		} catch (KeyStoreException e) {
-			System.err.println("ERROR: Error finding pkcs12");
-			e.printStackTrace();
-		}
 	}
 	
 	public String generateCNonce() {

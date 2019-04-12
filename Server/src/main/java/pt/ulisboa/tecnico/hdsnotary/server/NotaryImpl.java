@@ -15,6 +15,7 @@ import java.io.UnsupportedEncodingException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigInteger;
+import java.nio.charset.Charset;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStore;
@@ -29,11 +30,7 @@ import java.util.Scanner;
 import java.util.TreeMap;
 
 import pt.gov.cartaodecidadao.PteidException;
-import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
-import pt.ulisboa.tecnico.hdsnotary.library.Good;
-import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
-import pt.ulisboa.tecnico.hdsnotary.library.Result;
-import pt.ulisboa.tecnico.hdsnotary.library.Transfer;
+import pt.ulisboa.tecnico.hdsnotary.library.*;
 import pteidlib.PTEID_Certif;
 import pteidlib.pteid;
 import sun.security.pkcs11.wrapper.CK_ATTRIBUTE;
@@ -50,7 +47,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private final static String id = "Notary";
 	private final static String keysPath = "Server/storage/Notary.p12";
-	private final static String certPath = "Server/storage/CertCC.p12";
 	private final static String TRANSACTIONSPATH = "Server/storage/transactions.txt";
 	private final static String SELLINGLISTPATH = "Server/storage/selling.txt";
 	private final static String TEMPFILE = "Server/storage/temp.txt";
@@ -58,16 +54,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	// Singleton
 	private static NotaryImpl instance = null;
 
-	private SecureRandom secRandom = new SecureRandom();
-
 	// List containing all goods
 	private TreeMap<String, Good> goodsList = new TreeMap<>();
 
 	// List containing goods that are for sale
 	private ArrayList<String> goodsToSell = new ArrayList<String>();
 
-	// List containing nounces for security
-	private TreeMap<String, String> nounceList = new TreeMap<>();
+	// List containing nonces for security
+	private TreeMap<String, String> nonceList = new TreeMap<>();
 
 	private File transactionsFile = null;
 	private File sellingListFile = null;
@@ -81,6 +75,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	// CC
 	private PKCS11 pkcs11;
 	private long p11_session;
+	private X509Certificate certificate;
 
 	private boolean useCC = true;
 
@@ -157,9 +152,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public String getNonce(String userId) throws RemoteException {
-		System.out.println("Generating nounce for user " + userId);
+		System.out.println("Generating nonce for user " + userId);
 		String nonce = cryptoUtils.generateCNonce();
-		nounceList.put(userId, nonce);
+		nonceList.put(userId, nonce);
 		return nonce;
 	}
 
@@ -167,12 +162,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * Invoked when a user wants to sell a particular good
 	 */
 	@Override
-	public Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature)
+	public Result intentionToSell(String userId, String goodId, String cnonce, byte[] signature)
 			throws RemoteException {
 		System.out.println("------ INTENTION TO SELL ------\n" + "User: " + userId + "\tGood: " + goodId);
 
 		Good good;
-		String data = nounceList.get(userId) + cnounce + userId + goodId;
+		String data = nonceList.get(userId) + cnonce + userId + goodId;
 
 		// verifies if good exists, user owns good, good is not already for sale and
 		// signature is valid
@@ -182,12 +177,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			sellingListUpdate(good.getGoodId());
 			System.out.println("Result: TRUE");
 			System.out.println("-------------------------------\n");
-			return new Result(true, cnounce, cryptoUtils.signMessage(data + "true"));
+			return new Result(true, cnonce, cryptoUtils.signMessage(data + "true"));
 		}
 
 		System.out.println("Result: FALSE");
 		System.out.println("-------------------------------\n");
-		return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
+		return new Result(false, cnonce, cryptoUtils.signMessage(data + "false"));
 
 	}
 
@@ -196,21 +191,21 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * current owner is
 	 */
 	@Override
-	public Result stateOfGood(String userId, String cnounce, String goodId, byte[] signature) throws RemoteException {
+	public Result stateOfGood(String userId, String cnonce, String goodId, byte[] signature) throws RemoteException {
 		System.out.println("------ STATE OF GOOD ------\nUser: " + userId + "\tGood: " + goodId);
 
-		String data = nounceList.get(userId) + cnounce + userId + goodId;
+		String data = nonceList.get(userId) + cnonce + userId + goodId;
 
 		Good good;
 		if ((good = goodsList.get(goodId)) != null && cryptoUtils.verifySignature(userId, data, signature)) {
 			boolean status = goodsToSell.contains(goodId);
 			System.out.println("Owner: " + good.getUserId() + "\nFor Sale: " + status);
 			System.out.println("---------------------------\n");
-			return new Result(good.getUserId(), status, cnounce, cryptoUtils.signMessage(data + status));
+			return new Result(good.getUserId(), status, cnonce, cryptoUtils.signMessage(data + status));
 		}
 		System.out.println("ERROR getting state of good");
 		System.out.println("---------------------------\n");
-		return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
+		return new Result(false, cnonce, cryptoUtils.signMessage(data + "false"));
 
 	}
 
@@ -219,14 +214,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * every parameter is correct
 	 */
 	@Override
-	public Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature) throws IOException {
+	public Transfer transferGood(String sellerId, String buyerId, String goodId, String cnonce, byte[] signature) throws IOException, TransferException {
 		System.out.println("------ TRANSFER GOOD ------");
 
 		System.out.println("Seller: " + sellerId);
 		System.out.println("Buyer: " + buyerId);
 		System.out.println("Good: " + goodId);
 
-		String data = nounceList.get(sellerId) + cnounce + sellerId + buyerId + goodId;
+		String data = nonceList.get(sellerId) + cnonce + sellerId + buyerId + goodId;
 		Good good;
 
 		// verifies if the good exists, if the good is owned by the seller and if it is for sale, and if the signature
@@ -243,26 +238,28 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			
 			// Sign transfer with Cartao Do Cidadao
 			try {
+			    String toSign = transferId + buyerId + sellerId + goodId;
+                System.out.println("Verify: " + toSign);
 				Transfer transfer = new Transfer(transferId++, buyerId, sellerId, goodId,
-						useCC ? signWithCC(transferId + buyerId + sellerId + goodId) : null);
+						signWithCC(toSign));
 				System.out.println("Result: TRUE");
 				System.out.println("---------------------------");
 				printGoods();
-				return new Result(true, transfer, cnounce, cryptoUtils.signMessage(data + "true"));
+				return transfer;
 			} catch (UnsupportedEncodingException | PKCS11Exception e) {
 				System.err.println("ERROR: Signing with CC not possible");
 				System.out.println("Result: FALSE");
 				System.out.println("---------------------------");
 				printGoods();
 				e.printStackTrace();
-				return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
+				throw new TransferException("Signing with CC not possible!");
 			}
 
 		}
 		System.out.println("Result: NO");
 		System.out.println("---------------------------");
 		printGoods();
-		return new Result(false, cnounce, cryptoUtils.signMessage(data + "false"));
+		throw new TransferException("ERROR");
 
 	}
 
@@ -277,7 +274,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private byte[] signWithCC(String string) throws UnsupportedEncodingException, PKCS11Exception {
 		System.out.println("Signing with Cartao Do Cidadao");
-		return pkcs11.C_Sign(p11_session, string.getBytes("UTF-8"));
+		return pkcs11.C_Sign(p11_session, string.getBytes(Charset.forName("UTF-8")));
 	}
 
 	private void recoverSellingList() throws IOException {
@@ -337,12 +334,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private void removeSelling(String goodId) throws IOException {
 		//Remover given goodId from selling list
 		File tempFile = new File(TEMPFILE);
-		System.out.println("REMOVING FROM LIST!!!!!");
-		System.out.println("I WANT TO REMOVE " + goodId);
 		String currentLine;
 		tempWriter = new BufferedWriter(new FileWriter(tempFile));
 		while ((currentLine = inputSellings.readLine()) != null) {
-			System.out.println("CURRENT LINE = " + currentLine);
 		    // trim newline when comparing with lineToRemove
 		    String trimmedLine = currentLine.trim();
 		    if(trimmedLine.equals(goodId)) continue;
@@ -369,7 +363,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		try {
 			inputTransactions.close();
 			outputTransactions.close();
-		} catch (IOException e) {
+			outputSellings.close();
+			inputSellings.close();
+
+            pteid.Exit(pteid.PTEID_EXIT_LEAVE_CARD);
+
+		} catch (IOException | pteidlib.PteidException e) {
 			System.err.println("ERROR: Closing files failed. Transactions database may not be updated");
 		}
 
@@ -406,11 +405,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 		String libName = "libpteidpkcs11.so";
 
-		X509Certificate cert = getCertFromByteArray(getCertificateInBytes(0));
+		certificate = getCertFromByteArray(getCertificateInBytes(0));
 
-		cryptoUtils.writeCertToKeyStore(cert);
-
-		Class pkcs11Class;
+    	Class pkcs11Class;
 
 		pkcs11Class = Class.forName("sun.security.pkcs11.wrapper.PKCS11");
 
@@ -446,7 +443,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 		// initialize the signature method
 		CK_MECHANISM mechanism = new CK_MECHANISM();
-		mechanism.mechanism = PKCS11Constants.CKM_SHA1_RSA_PKCS;
+		mechanism.mechanism = PKCS11Constants.CKM_SHA256_RSA_PKCS;
 		mechanism.pParameter = null;
 		pkcs11.C_SignInit(p11_session, mechanism, signatureKey);
 
@@ -466,7 +463,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 			certificate_bytes = certs[n].certif; // gets the byte[] with the n-th certif
 
-			// pteid.Exit(pteid.PTEID_EXIT_LEAVE_CARD); // OBRIGATORIO Termina a eID Lib
 		} catch (pteidlib.PteidException e) {
 			e.printStackTrace();
 		}
@@ -479,5 +475,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		X509Certificate cert = (X509Certificate) f.generateCertificate(in);
 		return cert;
 	}
+
+
+	public X509Certificate getCertificate() {
+	    return certificate;
+    }
+
+
 
 }

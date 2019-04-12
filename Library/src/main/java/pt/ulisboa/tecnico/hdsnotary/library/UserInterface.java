@@ -8,5 +8,5 @@ public interface UserInterface extends Remote {
 	
 	String getNonce(String userId, byte[] signature) throws RemoteException;
 	
-	Boolean buyGood(String userId, String goodId, String cnonce, byte[] signature) throws RemoteException, IOException;
+	Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature) throws RemoteException, IOException, TransferException;
 }

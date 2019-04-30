@@ -104,6 +104,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 					scanner.nextLine();
 					count++;
 				} finally {
+					//exit if reading the citizen card fails 5 times
 					if (count == 5) {
 						System.err.println("ERROR: Number of tries exceeded. Aborting...");
 						scanner.close();
@@ -152,6 +153,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public String getNonce(String userId) throws RemoteException {
+		if(userId == null) throw new NullPointerException(); 
 		System.out.println("Generating nonce for user " + userId);
 		String nonce = cryptoUtils.generateCNonce();
 		nonceList.put(userId, nonce);
@@ -164,6 +166,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	@Override
 	public Result intentionToSell(String userId, String goodId, String cnonce, byte[] signature)
 			throws RemoteException {
+		if(userId == null || goodId == null || cnonce == null || signature == null) throw new NullPointerException();
+		
 		System.out.println("------ INTENTION TO SELL ------\n" + "User: " + userId + "\tGood: " + goodId);
 
 		Good good;
@@ -192,6 +196,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public Result stateOfGood(String userId, String cnonce, String goodId, byte[] signature) throws RemoteException {
+		
+		if(userId == null || cnonce == null || goodId == null || signature == null) throw new NullPointerException();
+		
 		System.out.println("------ STATE OF GOOD ------\nUser: " + userId + "\tGood: " + goodId);
 
 		String data = nonceList.get(userId) + cnonce + userId + goodId;
@@ -215,6 +222,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public Transfer transferGood(String sellerId, String buyerId, String goodId, String cnonce, byte[] signature) throws IOException, TransferException {
+		
+		if(sellerId == null || buyerId == null || goodId == null || cnonce == null || signature == null) throw new NullPointerException();
+
 		System.out.println("------ TRANSFER GOOD ------");
 
 		System.out.println("Seller: " + sellerId);
@@ -270,8 +280,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return sb.toString();
 	}
 
-	// ...
-
 	private byte[] signWithCC(String string) throws UnsupportedEncodingException, PKCS11Exception {
 		System.out.println("Signing with Cartao Do Cidadao");
 		return pkcs11.C_Sign(p11_session, string.getBytes(Charset.forName("UTF-8")));
@@ -293,13 +301,22 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		String line;
 		String[] splitLine;
 		Good good;
+
 		while ((line = inputTransactions.readLine()) != null) {
 			splitLine = line.split(";");
+			
+			//checks if line is well constructed
+			if(splitLine.length != 3 || splitLine[0] == null || splitLine[1] == null || splitLine[2] == null) {
+				System.err.println("ERROR: Recovering line failed. Ignoring line...");
+				continue;
+			}
+				
 			System.out.println("Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
 			good = goodsList.get(splitLine[2]);
 			good.setUserId(splitLine[1]);
 			goodsList.put(splitLine[2], good);
 		}
+
 
 	}
 
@@ -309,7 +326,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			outputTransactions.flush();
 		} catch (IOException e) {
 			System.err.println("ERROR: writing to TRANSACTIONS file failed");
-			e.printStackTrace();
 		}
 	}
 
@@ -476,8 +492,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return cert;
 	}
 
-
-	public X509Certificate getCertificate() {
+	@Override
+	public X509Certificate getCertificate() throws RemoteException {
 	    return certificate;
     }
 

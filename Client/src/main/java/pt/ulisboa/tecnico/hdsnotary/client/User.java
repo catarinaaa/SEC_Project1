@@ -53,7 +53,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 		goods = new HashMap<String, Boolean>();
 
-		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password);
+		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password, notary);
 
 		System.out.println("Initializing user " + id);
 

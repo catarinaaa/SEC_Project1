@@ -11,7 +11,6 @@
 .mtj.tmp/
 
 # Package Files #
-*.jar
 *.war
 *.nar
 *.ear
@@ -31,6 +30,12 @@ hs_err_pid*
 
 # Maven
 target/
+log/
+
+# Intellij
+.idea/
+*.iml
+*.iws
 
 # Eclipse files
 .project
@@ -38,3 +43,6 @@ target/
 .metadata/
 .settings/
 .recommenders/
+
+# Cartao do Cidadao KeyStore
+CertCC.p12 

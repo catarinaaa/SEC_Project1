@@ -1,18 +1,20 @@
 package pt.ulisboa.tecnico.hdsnotary.library;
 
+import java.io.IOException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
-import java.util.Set;
+import java.security.cert.X509Certificate;
 
 public interface NotaryInterface extends Remote {
 
-	String getNounce(String userId) throws RemoteException;
+	String getNonce(String userId) throws RemoteException;
 
-	Result intentionToSell(String userId, String goodId, String cnounce, byte[] signature) throws RemoteException;
+	Result intentionToSell(String userId, String goodId, String cnonce, byte[] signature) throws RemoteException;
 
-	State stateOfGood(String userId, String cnounce, String goodId) throws RemoteException;
+	Result stateOfGood(String userId, String cnonce, String goodId, byte[] signature) throws RemoteException;
 
-	Result transferGood(String sellerId, String buyerId, String goodId, String cnounce, byte[] signature)
-			throws RemoteException;
+	Transfer transferGood(String sellerId, String buyerId, String goodId, String cnonce, byte[] signature)
+            throws RemoteException, IOException, TransferException;
 
+	X509Certificate getCertificate() throws RemoteException;
 }

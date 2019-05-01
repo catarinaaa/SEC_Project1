@@ -9,14 +9,35 @@ public class Result implements Serializable {
 	 */
 	private static final long serialVersionUID = 1L;
 	
+	private String userId;
 	private Boolean result;
-	private String cnounce;
+	private Transfer transfer;
+	private String cnonce;
 	private byte[] signature;
 	
-	public Result(Boolean result, String cnounce, byte[] signature) {
+	public Result(Boolean result, String cnonce, byte[] signature) {
 		super();
+		this.userId = null;
 		this.result = result;
-		this.cnounce = cnounce;
+		this.cnonce = cnonce;
+		this.signature = signature;
+		this.transfer = null;
+	}
+	
+	public Result(Boolean result, Transfer transfer, String cnonce, byte[] signature) {
+		super();
+		this.userId = null;
+		this.result = result;
+		this.cnonce = cnonce;
+		this.signature = signature;
+		this.transfer = transfer;
+	}
+
+	public Result(String userId, Boolean result, String cnonce, byte[] signature) {
+		super();
+		this.userId = userId;
+		this.result = result;
+		this.cnonce = cnonce;
 		this.signature = signature;
 	}
 	
@@ -27,5 +48,16 @@ public class Result implements Serializable {
 	public byte[] getSignature() {
 		return signature;
 	}
-		
+	
+	public String getUserId() {
+		return userId;
+	}
+
+	public Transfer getTransfer() {
+		return transfer;
+	}
+
+	public String getCnonce() {
+		return cnonce;
+	}
 }

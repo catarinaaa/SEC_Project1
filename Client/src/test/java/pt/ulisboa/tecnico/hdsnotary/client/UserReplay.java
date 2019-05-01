@@ -14,8 +14,8 @@ import java.util.Map;
 
 import pt.ulisboa.tecnico.hdsnotary.library.*;
 
-public class User extends UnicastRemoteObject implements UserInterface {
-
+public class UserReplay extends UnicastRemoteObject implements UserInterface {
+	
 	private static final long serialVersionUID = 1L;
 
 	private static final String NOTARY_ID = "Notary";
@@ -31,15 +31,15 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	// Instance of remote Notary Object
 	private NotaryInterface notary = null;
 
-
+	
 	private String keysPath; // KeyStore location
 	private String password; // KeyStore password
-
+	
 	CryptoUtilities cryptoUtils;
-
+	
 	private Map<String, String> nonceList = new HashMap<>();
 
-	public User(String id, NotaryInterface notary, String user2, String user3) throws RemoteException, KeyStoreException {
+	public UserReplay(String id, NotaryInterface notary, String user2, String user3) throws RemoteException, KeyStoreException {
 
 		this.id = id;
 		this.notary = notary;
@@ -47,14 +47,14 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		this.user3 = user3;
 
 		goods = new HashMap<String, Boolean>();
-
+		
 		this.keysPath = "Client/storage/" + id + ".p12";
 		this.password = id + "1234";
 
 		goods = new HashMap<String, Boolean>();
 
-		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password, notary);
-
+		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password);
+		
 		System.out.println("Initializing user " + id);
 
 	}
@@ -74,31 +74,29 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	public Map<String, Boolean> getGoods() {
 		return goods;
 	}
-
+	
 	public void addGood(String goodId, boolean bool) {
 		goods.put(goodId, bool);
 	}
 
-	/*
-	 * Function to obtain a nonce for communication
-	 * Invoked before executing any other method
-	 */
 	@Override
 	public String getNonce(String userId, byte[] signature) {
-
-		String nonce = cryptoUtils.generateCNonce();
-		nonceList.put(userId, nonce);
-		return nonce;
+		
+		String nounce = cryptoUtils.generateCNonce();
+		nonceList.put(userId, nounce);
+		return nounce;
 	}
-
-	/*
-	 * Invoked when another user is buying a good that this user owns
-	 */
+	
+	public static String byteArrayToHex(byte[] a) {
+		   StringBuilder sb = new StringBuilder(a.length * 2);
+		   for(byte b: a)
+		      sb.append(String.format("%02x", b));
+		   return sb.toString();
+		}
+	
 	@Override
-	public Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
-
+	public Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature) throws IOException, TransferException {
 		try {
-
 			String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
 
 			if (!cryptoUtils.verifySignature(userId, toVerify, signature))
@@ -108,62 +106,61 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			String nonceToNotary = cryptoUtils.generateCNonce();
 			String data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
 
-			Transfer result = notary.transferGood(this.getId(), userId, goodId, nonceToNotary, cryptoUtils.signMessage(data));
+			byte[] signature2 = cryptoUtils.signMessage(data);
+
+			Transfer result = notary.transferGood(this.getId(), userId, goodId, nonceToNotary, signature2);
 
 			String transferVerify = result.getId() + result.getBuyerId() + result.getSellerId() + result.getGoodId();
-			System.out.println("Verify: " + transferVerify);
 
-			if (cryptoUtils.verifySignature(NOTARY_CC, transferVerify, result.getNotarySignature(), notary.getCertificate())) {
+			if (cryptoUtils.verifySignature(NOTARY_ID, transferVerify, result.getNotarySignature())) {
 				System.out.println("CC Signature verified! Notary confirmed buy good");
 				goods.remove(goodId);
 				return result;
 			}
 			else {
-				System.err.println("ERROR: CC Signature does not verify");
+				System.err.println("ERROR: Signature does not verify");
 				throw new TransferException("Error");
 			}
-		} catch (IOException e) {
+		}
+		catch(IOException e) {
 			rebind();
 			return buyGood(userId, goodId, cnonce, signature);
 		}
 	}
-
-	/*
-	 * Invoked when interacting with the users
-	 */
+	
 	public boolean buying(String goodId) {
 		try {
 			Result stateOfGood = stateOfGood(goodId);
 			if (stateOfGood == null || false == stateOfGood.getResult()) {
-				System.out.println("ERROR: Buying was not possible!");
-				System.out.println("------------------");
+				System.out.println("Good is not up for sale");
 				return false;
 			}
 			else {
 				String seller = stateOfGood.getUserId();
-
+				
 				if(remoteUser2 == null || remoteUser3 == null) {
 					lookUpUsers();
 				}
-
+				
 				Transfer result;
-
+				
 				if(seller.equals(user2) && remoteUser2 != null) {
-
-					String nonce = remoteUser2.getNonce(this.id, cryptoUtils.signMessage(this.id));
-					String cnonce = cryptoUtils.generateCNonce();
-					nonceList.put(user2, cnonce);
-					String toSign = nonce + cnonce + this.id + goodId;
-					result = remoteUser2.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
+					
+					String nounce = remoteUser2.getNonce(this.id, cryptoUtils.signMessage(this.id));
+					String cnounce = cryptoUtils.generateCNonce();
+					nonceList.put(user2, cnounce);
+					String toSign = nounce + cnounce + this.id + goodId;
+					result = remoteUser2.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+					result = remoteUser2.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
 				}
 				else if(seller.equals(user3) && remoteUser3 != null) {
-					String nonce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
-					String cnonce = cryptoUtils.generateCNonce();
-					nonceList.put(user3, cnonce);
-					String toSign = nonce + cnonce + this.id + goodId;
-					result = remoteUser3.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
+					String nounce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
+					String cnounce = cryptoUtils.generateCNonce();
+					nonceList.put(user3, cnounce);
+					String toSign = nounce + cnounce + this.id + goodId;
+					result = remoteUser3.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+					result = remoteUser3.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
 				}
-
 
 				goods.put(goodId, false);
 				System.out.println("SUCCESSFUL BUY");
@@ -171,44 +168,34 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				System.out.println("------------------");
 				return true;
 
-
 			}
-
 		} catch (IOException e) {
 			rebind();
 			return buying(goodId);
 		}
-		catch (TransferException e) {
+
+		catch(TransferException e) {
 			System.out.println("Buying not possible!");
+			System.out.println("------------------");
 			return false;
 		}
 	}
 
-	/*
-	 * Invoked when a user wants to sell a good
-	 */
-
 	public boolean intentionSell(String goodId) {
 		try {
-			String nonce = notary.getNonce(this.id);
-			String cnonce = cryptoUtils.generateCNonce();
-			String data = nonce + cnonce + this.id + goodId;
-			Result result = notary.intentionToSell(this.id, goodId, cnonce, cryptoUtils.signMessage(data));
-
+			String nounce = notary.getNonce(this.id);
+			String cnounce = cryptoUtils.generateCNonce();
+			String data = nounce + cnounce + this.id + goodId;
+			Result result = notary.intentionToSell(this.id, goodId, cnounce, cryptoUtils.signMessage(data));
+			
 			if (result != null && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
-				if(result.getResult()) {
-					goods.replace(goodId, true);
-					System.out.println("Result: " + goodId + " is now for sale");
-				}
-				else {
-					System.out.println("Result: Invalid good");
-				}
-				System.out.println("-----------------------------");
+				System.out.println("Signature verified! Notary confirmed intention to sell");
+				goods.replace(goodId, true);
+				System.out.println("Result: " + goodId + " is now for sale");
 				return result.getResult();
 			}
 			else {
 				System.err.println("ERROR: Signature does not verify");
-				System.out.println("-----------------------------");
 				return false;
 			}
 		} catch (RemoteException e) {
@@ -216,38 +203,33 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			return intentionSell(goodId);
 		}
 	}
-
-	/*
-	 * Invoked to get current state of a good, it returns the current owner and if it is for sale or not
-	 */
+	
 	public Result stateOfGood(String goodId) {
 		try {
-
-			String cnonce = cryptoUtils.generateCNonce();
-			String data = notary.getNonce(this.id) + cnonce + this.id + goodId;
-
-			Result result = notary.stateOfGood(this.getId(), cnonce, goodId, cryptoUtils.signMessage(data));
-
-			if (cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
-				System.out.println("Owner: " + result.getUserId());
-				System.out.println("For sale: " + result.getResult());
-				System.out.println("-------------------------");
+			String cnounce = cryptoUtils.generateCNonce();
+			String data = notary.getNonce(this.id) + cnounce + this.id + goodId;
+			
+			System.out.println("DATA: " + data);
+	
+			Result result = notary.stateOfGood(this.getId(), cnounce, goodId, cryptoUtils.signMessage(data));
+	
+			System.out.println("> " + data + result.getResult());
+	
+			if (cryptoUtils.verifySignature(NOTARY_CC, data + result.getResult(), result.getSignature())) {
+				System.out.println("Signature verified! Notary confirmed state of good message");
+				System.out.println("For sale: " + result.getResult() +"\n");
 				return result;
 			}
 			else {
 				System.err.println("ERROR: Signature does not verify");
-				System.out.println("-------------------------");
-				return null;
+				return result;
 			}
 		} catch(RemoteException e) {
 			rebind();
 			return stateOfGood(goodId);
 		}
 	}
-
-	/*
-	 * Invoked when the server crashes and communications between the user and the notary fail
-	 */
+	
 	public void rebind() {
 		try {
         	Registry reg = LocateRegistry.getRegistry(3000);
@@ -257,20 +239,14 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			e.printStackTrace();
 		}
 	}
-
-	/*
-	 * List all current goods
-	 */
+	
 	public void listGoods() {
 		for (String goodId: goods.keySet()){
 			Boolean value = goods.get(goodId);
             System.out.println(goodId + " --> For sale: " + value);
-		}
+		} 
 	}
-
-	/*
-	 * Finds the remaining users on the RMI registry
-	 */
+	
 	private void lookUpUsers() {
 		System.out.println(getUser2());
 		System.out.println(getUser3());

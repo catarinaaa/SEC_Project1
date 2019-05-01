@@ -1,13 +1,4 @@
-# sec2019
-Highly Dependable Systems project from IST.
-
-## Creators
-Catarina Brás 83439\
-Pedro Salgueiro 83542\
-Tiago Almeida 83568
-
-
-## Instructions
+Instructions:
 Below there are 5 different executions, one with normal execution and 4 with simulation of attacks.
 4 terminals should be open for executing the tests and the following commands should be introduced.
 

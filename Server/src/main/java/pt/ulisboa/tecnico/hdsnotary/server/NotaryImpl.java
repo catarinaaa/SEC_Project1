@@ -1,27 +1,18 @@
 package pt.ulisboa.tecnico.hdsnotary.server;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Serializable;
-import java.io.UnsupportedEncodingException;
+import pt.gov.cartaodecidadao.PteidException;
+import pt.ulisboa.tecnico.hdsnotary.library.*;
+import pteidlib.PTEID_Certif;
+import pteidlib.pteid;
+import sun.security.pkcs11.wrapper.*;
+
+import java.io.*;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
-import java.security.KeyStore;
 import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -29,23 +20,11 @@ import java.util.ArrayList;
 import java.util.Scanner;
 import java.util.TreeMap;
 
-import pt.gov.cartaodecidadao.PteidException;
-import pt.ulisboa.tecnico.hdsnotary.library.*;
-import pteidlib.PTEID_Certif;
-import pteidlib.pteid;
-import sun.security.pkcs11.wrapper.CK_ATTRIBUTE;
-import sun.security.pkcs11.wrapper.CK_C_INITIALIZE_ARGS;
-import sun.security.pkcs11.wrapper.CK_MECHANISM;
-import sun.security.pkcs11.wrapper.CK_SESSION_INFO;
-import sun.security.pkcs11.wrapper.PKCS11;
-import sun.security.pkcs11.wrapper.PKCS11Constants;
-import sun.security.pkcs11.wrapper.PKCS11Exception;
-
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	private final static String id = "Notary";
+	private String id;
 	private final static String keysPath = "Server/storage/Notary.p12";
 	private final static String TRANSACTIONSPATH = "Server/storage/transactions.txt";
 	private final static String SELLINGLISTPATH = "Server/storage/selling.txt";
@@ -58,7 +37,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private TreeMap<String, Good> goodsList = new TreeMap<>();
 
 	// List containing goods that are for sale
-	private ArrayList<String> goodsToSell = new ArrayList<String>();
+	private ArrayList<String> goodsToSell = new ArrayList<>();
 
 	// List containing nonces for security
 	private TreeMap<String, String> nonceList = new TreeMap<>();
@@ -69,7 +48,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private BufferedWriter outputTransactions = null;
 	private BufferedReader inputSellings = null;
 	private BufferedWriter outputSellings = null;
-	private BufferedWriter tempWriter = null;
 	private int transferId = 1;
 
 	// CC
@@ -77,17 +55,30 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private long p11_session;
 	private X509Certificate certificate;
 
-	private boolean useCC = true;
+	private boolean useCC;
 
 	private CryptoUtilities cryptoUtils;
 
-	public NotaryImpl(boolean cc) throws RemoteException, KeyStoreException {
+	public static NotaryImpl getInstance(boolean useCC, String id) throws KeyStoreException {
+		if (instance == null) {
+			try {
+				instance = new NotaryImpl(useCC, id);
+			} catch (RemoteException e) {
+				e.printStackTrace();
+				System.exit(1);
+			}
+		}
+		return instance;
+	}
+
+	private NotaryImpl(boolean cc, String id) throws RemoteException, KeyStoreException {
 		super();
 		populateList();
 		Scanner scanner = new Scanner(System.in);
 		this.useCC = cc;
+		this.id = id;
 
-		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.id);
+		cryptoUtils = new CryptoUtilities(this.id, keysPath, this.id);
 
 		int count = 0;
 
@@ -135,17 +126,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 	}
 
-	public static NotaryImpl getInstance(boolean useCC) throws KeyStoreException {
-		if (instance == null) {
-			try {
-				instance = new NotaryImpl(useCC);
-			} catch (RemoteException e) {
-				e.printStackTrace();
-				System.exit(1);
-			}
-		}
-		return instance;
-	}
+
 
 	/*
 	 * Generate random number only used once, for prevention of Replay Attacks and
@@ -251,12 +232,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			    String toSign = transferId + buyerId + sellerId + goodId;
                 System.out.println("Verify: " + toSign);
 				Transfer transfer = new Transfer(transferId++, buyerId, sellerId, goodId,
-						signWithCC(toSign));
+						useCC ? signWithCC(toSign) : cryptoUtils.signMessage(toSign));
 				System.out.println("Result: TRUE");
 				System.out.println("---------------------------");
 				printGoods();
 				return transfer;
-			} catch (UnsupportedEncodingException | PKCS11Exception e) {
+			} catch (PKCS11Exception e) {
 				System.err.println("ERROR: Signing with CC not possible");
 				System.out.println("Result: FALSE");
 				System.out.println("---------------------------");
@@ -273,14 +254,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	}
 
-	public static String byteArrayToHex(byte[] a) {
-		StringBuilder sb = new StringBuilder(a.length * 2);
-		for (byte b : a)
-			sb.append(String.format("%02x", b));
-		return sb.toString();
-	}
-
-	private byte[] signWithCC(String string) throws UnsupportedEncodingException, PKCS11Exception {
+	private byte[] signWithCC(String string) throws PKCS11Exception {
 		System.out.println("Signing with Cartao Do Cidadao");
 		return pkcs11.C_Sign(p11_session, string.getBytes(Charset.forName("UTF-8")));
 	}
@@ -351,7 +325,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		//Remover given goodId from selling list
 		File tempFile = new File(TEMPFILE);
 		String currentLine;
-		tempWriter = new BufferedWriter(new FileWriter(tempFile));
+		BufferedWriter tempWriter = new BufferedWriter(new FileWriter(tempFile));
 		while ((currentLine = inputSellings.readLine()) != null) {
 		    // trim newline when comparing with lineToRemove
 		    String trimmedLine = currentLine.trim();

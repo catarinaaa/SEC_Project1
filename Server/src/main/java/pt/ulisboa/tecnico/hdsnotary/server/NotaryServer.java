@@ -9,9 +9,14 @@ public class NotaryServer {
 
 	public static void main(String[] args) {
 		int port = 3000;
+		boolean useCC = true;
+
+		if(args.length == 1) {
+			useCC = Boolean.parseBoolean(args[0]);
+		}
 
 		try {
-			NotaryImpl obj = NotaryImpl.getInstance(true);
+			NotaryImpl obj = NotaryImpl.getInstance(useCC, "Notary");
 
 			reg = LocateRegistry.createRegistry(port);
 			reg.rebind("Notary", obj);

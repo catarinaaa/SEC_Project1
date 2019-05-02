@@ -25,7 +25,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 	private static final long serialVersionUID = 1L;
 
-	private static final String NOTARY_ID = "Notary";
+	private static final String[] NOTARY_LIST = new String[] {"Notary1", "Notary2", "Notary3", "Notary4"};
 	private static final String NOTARY_CC = "CertCC";
 
 	private final String id;
@@ -37,8 +37,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	// List of all goods possessed
 	private Map<String, Boolean> goods;
 	// Instance of remote Notary Object
-	private ArrayList<NotaryInterface> notaryServers;
-	private NotaryInterface notary;
+	private TreeMap<String, NotaryInterface> notaryServers;
 
 
 	private String keysPath; // KeyStore location
@@ -48,14 +47,13 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 	private Map<String, String> nonceList = new HashMap<>();
 
-	public User(String id, NotaryInterface notary, ArrayList<NotaryInterface> notaryServers,
+	public User(String id, TreeMap<String, NotaryInterface> notaryServers,
 		String user2, String user3,
 		Boolean verifyCC)
 		throws RemoteException, KeyStoreException, InvalidSignatureException {
 
 		this.id = id;
 		this.notaryServers = notaryServers;
-		this.notary = notary;
 		this.user2 = user2;
 		this.user3 = user3;
 		this.verifyCC = verifyCC;
@@ -63,7 +61,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		this.keysPath = "Client/storage/" + id + ".p12";
 		this.password = id + "1234";
 
-		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password, notary);
+		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password);
 
 		System.out.println("Initializing user " + id);
 
@@ -71,9 +69,13 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 	}
 
+	/*
+	 * Function to obtain goods owned by the user
+	 */
 	private void connectToNotary() throws RemoteException, InvalidSignatureException {
 		TreeMap<String, Boolean> map = null;
-		for (NotaryInterface notary : notaryServers) {
+		// TODO verify signatures
+		for (NotaryInterface notary : notaryServers.values()) {
 			String cnonce = cryptoUtils.generateCNonce();
 			String toSign = notary.getNonce(this.id) + cnonce + this.id;
 			map = notary
@@ -129,7 +131,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 		try {
 			Transfer result = null;
-			for (NotaryInterface notary : notaryServers) {
+			String lastNotary = null;
+			for (String notaryID : notaryServers.keySet()) {
+				NotaryInterface notary = notaryServers.get(notaryID);
+
 				String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
 
 				if (!cryptoUtils.verifySignature(userId, toVerify, signature)) {
@@ -141,6 +146,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 				result = notary.transferGood(this.getId(), userId, goodId, nonceToNotary,
 					cryptoUtils.signMessage(data));
+
+				lastNotary = notaryID;
 			}
 
 			String transferVerify =
@@ -149,7 +156,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 			if (!verifyCC || cryptoUtils
 				.verifySignature(NOTARY_CC, transferVerify, result.getNotarySignature(),
-					notary.getCertificate())) {
+					notaryServers.get(lastNotary).getCertificate())) {
 				System.out.println("CC Signature verified! Notary confirmed buy good");
 				goods.remove(goodId);
 				return result;
@@ -225,15 +232,18 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		try {
 			Result result = null;
 			String data = null;
-			for (NotaryInterface notary : notaryServers) {
+			String lastNotary = null;
+			for (String notaryID : notaryServers.keySet()) {
+				NotaryInterface notary = notaryServers.get(notaryID);
 				String nonce = notary.getNonce(this.id);
 				String cnonce = cryptoUtils.generateCNonce();
 				data = nonce + cnonce + this.id + goodId;
 				result = notary
 					.intentionToSell(this.id, goodId, cnonce, cryptoUtils.signMessage(data));
+				lastNotary = notaryID;
 			}
 			if (result != null && cryptoUtils
-				.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
+				.verifySignature(lastNotary, data + result.getResult(), result.getSignature())) {
 				if (result.getResult()) {
 					goods.replace(goodId, true);
 					System.out.println("Result: " + goodId + " is now for sale");
@@ -261,14 +271,20 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	public Result stateOfGood(String goodId) {
 		try {
 
-			String cnonce = cryptoUtils.generateCNonce();
-			String data = notary.getNonce(this.id) + cnonce + this.id + goodId;
+			String data = null;
+			Result result = null;
+			String lastNotary = null;
+			for(String notaryID : notaryServers.keySet()) {
+				NotaryInterface notary = notaryServers.get(notaryID);
+				String cnonce = cryptoUtils.generateCNonce();
+				data = notary.getNonce(this.id) + cnonce + this.id + goodId;
 
-			Result result = notary
-				.stateOfGood(this.getId(), cnonce, goodId, cryptoUtils.signMessage(data));
-
+				result = notary
+						.stateOfGood(this.getId(), cnonce, goodId, cryptoUtils.signMessage(data));
+				lastNotary = notaryID;
+			}
 			if (cryptoUtils
-				.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
+				.verifySignature(lastNotary, data + result.getResult(), result.getSignature())) {
 				System.out.println("Owner: " + result.getUserId());
 				System.out.println("For sale: " + result.getResult());
 				System.out.println("-------------------------");
@@ -287,15 +303,15 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	/*
 	 * Invoked when the server crashes and communications between the user and the notary fail
 	 */
-	public void rebind() {
+	private void rebind() {
 		try {
-			Registry reg = LocateRegistry.getRegistry(3000);
-			this.notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
-			reg.rebind(getId(), this);
+			notaryServers = Client.locateNotaries();
 		} catch (MalformedURLException | RemoteException | NotBoundException e) {
 			e.printStackTrace();
+			System.exit(0);
 		}
 	}
+
 
 	/*
 	 * List all current goods

@@ -10,6 +10,8 @@ import java.rmi.registry.Registry;
 import java.security.KeyStoreException;
 import java.util.ArrayList;
 import java.util.Scanner;
+import java.util.TreeMap;
+
 import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
 import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
 
@@ -37,9 +39,10 @@ public class Client {
 				System.out.println("Name > " + s);
 			}
 
-			NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
+//			NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
 
-			ArrayList<NotaryInterface> notaries = locateNotaries();
+			TreeMap<String, NotaryInterface> notaries = locateNotaries();
+//			notaries.put("Notary", notary);
 
 			while (true) {
 				if (args.length == 0) {
@@ -54,19 +57,19 @@ public class Client {
 				}
 				switch ((args.length > 0) ? Integer.parseInt(args[0]) : scanner.nextInt()) {
 					case 1:
-						user = new User("Alice", notary, notaries, "Bob", "Charlie", false);
+						user = new User("Alice", notaries, "Bob", "Charlie", false);
 						name = "Alice";
 						//user.addGood("good1", false);
 						//user.addGood("good2", false);
 						break;
 					case 2:
-						user = new User("Bob", notary, notaries, "Alice", "Charlie", false);
+						user = new User("Bob", notaries, "Alice", "Charlie", false);
 						name = "Bob";
 //                        user.addGood("good3", false);
 //                        user.addGood("good4", false);
 						break;
 					case 3:
-						user = new User("Charlie", notary, notaries, "Alice", "Bob", false);
+						user = new User("Charlie", notaries, "Alice", "Bob", false);
 						name = "Charlie";
 //                        user.addGood("good5", false);
 //                        user.addGood("good6", false);
@@ -83,9 +86,9 @@ public class Client {
 
 			}
 
-			Boolean exit = true;
+			Boolean exit = false;
 
-			while (exit) {
+			while (!exit) {
 
 				System.out.println("\nChoose one option:");
 				System.out.println("1 - List goods owned");
@@ -123,7 +126,7 @@ public class Client {
 						break;
 					case 5:
 						System.out.println("Goodbye!");
-						exit = false;
+						exit = true;
 						break;
 					default:
 						System.out.println("Invalid option!");
@@ -137,20 +140,21 @@ public class Client {
 			System.err.println("ERROR creating user, cryptoUtils error");
 		} catch (InvalidSignatureException e) {
 			e.printStackTrace();
-		} finally {
+		}
+		finally {
 			System.err.println("Exiting!");
 			scanner.close();
 			System.exit(0);
 		}
 	}
 
-	private static ArrayList<NotaryInterface> locateNotaries()
+	public static TreeMap<String, NotaryInterface> locateNotaries()
 		throws NotBoundException, MalformedURLException, RemoteException {
-		ArrayList<NotaryInterface> list = new ArrayList<>();
-		list.add((NotaryInterface) Naming.lookup("//localhost:3000/Notary1"));
-		list.add((NotaryInterface) Naming.lookup("//localhost:3000/Notary2"));
-		list.add((NotaryInterface) Naming.lookup("//localhost:3000/Notary3"));
-		list.add((NotaryInterface) Naming.lookup("//localhost:3000/Notary4"));
+		TreeMap<String, NotaryInterface> list = new TreeMap<>();
+		list.put("Notary1", (NotaryInterface) Naming.lookup("//localhost:3000/Notary1"));
+		list.put("Notary2", (NotaryInterface) Naming.lookup("//localhost:3000/Notary2"));
+		list.put("Notary3", (NotaryInterface) Naming.lookup("//localhost:3000/Notary3"));
+		list.put("Notary4", (NotaryInterface) Naming.lookup("//localhost:3000/Notary4"));
 		return list;
 	}
 }

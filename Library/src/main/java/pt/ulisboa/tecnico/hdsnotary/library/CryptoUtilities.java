@@ -34,50 +34,8 @@ public class CryptoUtilities {
 	private HashMap<String, String> certPathsList = new HashMap<>();
 	
 	Scanner scanner = new Scanner(System.in);
-	NotaryInterface notary;
-	
-	public CryptoUtilities(String id, String keysPath, String password, NotaryInterface notary) throws KeyStoreException {
-		this.notary = notary;
-		this.userId = id;
-		this.keysPath = keysPath;
-		this.password = password;
-		
-		this.passwordsKeyStores.put("Alice", "Alice1234");
-		this.passwordsKeyStores.put("Bob", "Bob1234");
-		this.passwordsKeyStores.put("Charlie", "Charlie1234");
-		this.passwordsKeyStores.put("Notary", "Notary");
-		this.passwordsKeyStores.put("CertCC", "Notary");
-		this.certPathsList.put("Alice", "Client/storage/Alice.p12");
-		this.certPathsList.put("Bob", "Client/storage/Bob.p12");
-		this.certPathsList.put("Charlie", "Client/storage/Charlie.p12");
-		this.certPathsList.put("Notary", "Server/storage/Notary.p12");
-		this.certPathsList.put("CertCC", "Server/storage/CertCC.p12");
-		
-		int count = 0;
-		while(count <= 5) {
-			try {
-				this.privateKey = getStoredKey();
-				break;
-			} catch (KeyStoreException e) {
-				System.out.println("Check if the right keyStore is in folder storage and press Enter");
-				scanner.nextLine();
-				count++;
-			} finally {
-				if (count == 5) {
-					System.err.println("ERROR: Number of tries exceeded. Aborting...");
-					scanner.close();
-					System.exit(1);
-				}
-			}
-		}
-		
-		
-		this.privateKey = getStoredKey();
-	}
 	
 	public CryptoUtilities(String id, String keysPath, String password) throws KeyStoreException {
-		
-		
 		this.userId = id;
 		this.keysPath = keysPath;
 		this.password = password;
@@ -86,10 +44,18 @@ public class CryptoUtilities {
 		this.passwordsKeyStores.put("Bob", "Bob1234");
 		this.passwordsKeyStores.put("Charlie", "Charlie1234");
 		this.passwordsKeyStores.put("Notary", "Notary");
+		this.passwordsKeyStores.put("Notary1", "Notary1");
+		this.passwordsKeyStores.put("Notary2", "Notary2");
+		this.passwordsKeyStores.put("Notary3", "Notary3");
+		this.passwordsKeyStores.put("Notary4", "Notary4");
 		this.passwordsKeyStores.put("CertCC", "Notary");
 		this.certPathsList.put("Alice", "Client/storage/Alice.p12");
 		this.certPathsList.put("Bob", "Client/storage/Bob.p12");
 		this.certPathsList.put("Charlie", "Client/storage/Charlie.p12");
+		this.certPathsList.put("Notary1", "Server/storage/Notary1.p12");
+		this.certPathsList.put("Notary2", "Server/storage/Notary2.p12");
+		this.certPathsList.put("Notary3", "Server/storage/Notary3.p12");
+		this.certPathsList.put("Notary4", "Server/storage/Notary4.p12");
 		this.certPathsList.put("Notary", "Server/storage/Notary.p12");
 		this.certPathsList.put("CertCC", "Server/storage/CertCC.p12");
 		
@@ -110,10 +76,47 @@ public class CryptoUtilities {
 				}
 			}
 		}
-		
-		
-		this.privateKey = getStoredKey();
 	}
+	
+//	public CryptoUtilities(String id, String keysPath, String password) throws KeyStoreException {
+//
+//
+//		this.userId = id;
+//		this.keysPath = keysPath;
+//		this.password = password;
+//
+//		this.passwordsKeyStores.put("Alice", "Alice1234");
+//		this.passwordsKeyStores.put("Bob", "Bob1234");
+//		this.passwordsKeyStores.put("Charlie", "Charlie1234");
+//		this.passwordsKeyStores.put("Notary", "Notary");
+//		this.passwordsKeyStores.put("CertCC", "Notary");
+//		this.certPathsList.put("Alice", "Client/storage/Alice.p12");
+//		this.certPathsList.put("Bob", "Client/storage/Bob.p12");
+//		this.certPathsList.put("Charlie", "Client/storage/Charlie.p12");
+//		this.certPathsList.put("Notary", "Server/storage/Notary.p12");
+//		this.certPathsList.put("CertCC", "Server/storage/CertCC.p12");
+//
+//		int count = 0;
+//		while(count <= 5) {
+//			try {
+//				this.privateKey = getStoredKey();
+//				break;
+//			} catch (KeyStoreException e) {
+//				System.out.println("Check if the right keyStore is in folder storage and press Enter");
+//				scanner.nextLine();
+//				count++;
+//			} finally {
+//				if (count == 5) {
+//					System.err.println("ERROR: Number of tries exceeded. Aborting...");
+//					scanner.close();
+//					System.exit(1);
+//				}
+//			}
+//		}
+//
+//
+//		this.privateKey = getStoredKey();
+//	}
 
 	public boolean verifySignature(String id, String toVerify, byte[] signature) {
 		return verifySignature(id, toVerify, signature, null);
@@ -163,6 +166,7 @@ public class CryptoUtilities {
 	}
 	
 	public PrivateKey getStoredKey() throws KeyStoreException {
+		System.out.println("Keystore: " + this.userId);
 		// Load KeyStore
 		KeyStore ks = KeyStore.getInstance("pkcs12");
 		KeyStore.ProtectionParameter protParam = new KeyStore.PasswordProtection(password.toCharArray());
@@ -183,6 +187,7 @@ public class CryptoUtilities {
 			System.err.println("ERROR: KeyStore/certificate of user" + userId + " not found");
 		} catch (UnrecoverableEntryException | IOException e) {
 			System.err.println("ERROR: Wrong password of KeyStore");
+			e.printStackTrace();
 		} catch (NoSuchAlgorithmException e) {
 			System.err.println("ERROR: Wrong algorithm in KeyStore");
 		}
@@ -213,6 +218,7 @@ public class CryptoUtilities {
 			System.err.println("ERROR: KeyStore/certificate of " + userId + " not found");
 		} catch (IOException e) {
 			System.err.println("ERROR: Wrong password of KeyStore");
+			e.printStackTrace();
 		} catch (NoSuchAlgorithmException e) {
 			System.err.println("ERROR: Wrong algorithm in KeyStore");
 		}

@@ -44,10 +44,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private static final long serialVersionUID = 1L;
 
 	private String id;
-	private final static String keysPath = "Server/storage/Notary.p12";
-	private final static String TRANSACTIONSPATH = "Server/storage/transactions.txt";
-	private final static String SELLINGLISTPATH = "Server/storage/selling.txt";
-	private final static String TEMPFILE = "Server/storage/temp.txt";
+	private final String keysPath;
+	private final String TRANSACTIONSPATH;
+	private final String SELLINGLISTPATH;
+	private final String TEMPFILE;
 
 	// Singleton
 	private static NotaryImpl instance = null;
@@ -97,7 +97,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		this.useCC = cc;
 		this.id = id;
 
-		cryptoUtils = new CryptoUtilities(this.id, keysPath, this.id);
+		this.keysPath = "Server/storage/" + id + ".p12";
+		this.TRANSACTIONSPATH = "Server/storage/transactions" + id + ".txt";
+		this.SELLINGLISTPATH = "Server/storage/selling" + id + ".txt";
+		this.TEMPFILE = "Server/storage/temp" + id + ".txt";
+
+		cryptoUtils = new CryptoUtilities(this.id, keysPath, this.id );
 
 		int count = 0;
 

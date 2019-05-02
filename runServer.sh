@@ -5,7 +5,7 @@ mkdir Server/classes
 mkdir Library/classes
 mkdir Server/storage
 
-export CLASSPATH="/home/pedro/SEC/SEC_Project1/Server/classes/:/home/pedro/SEC/SEC_Project1/Library/classes:./"
+export CLASSPATH="$HOME/Disciplinas/SEC/SEC_Project1/Server/classes/:$HOME/Disciplinas/SEC/SEC_Project1/Library/classes:./"
 
 echo "Compiling..."
 javac -d Library/classes Library/src/main/java/pt/ulisboa/tecnico/hdsnotary/library/*.java 

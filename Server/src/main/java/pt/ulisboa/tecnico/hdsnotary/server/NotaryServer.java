@@ -44,7 +44,7 @@ public class NotaryServer {
 		} catch (Exception e) {
 			System.err.println("ERROR: Aborting...");
 			e.printStackTrace();
-			return;
+			System.exit(1);
 		}
 
 	}

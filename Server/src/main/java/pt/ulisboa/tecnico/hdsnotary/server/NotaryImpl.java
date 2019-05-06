@@ -1,12 +1,14 @@
 package pt.ulisboa.tecnico.hdsnotary.server;
 
-import pt.gov.cartaodecidadao.PteidException;
-import pt.ulisboa.tecnico.hdsnotary.library.*;
-import pteidlib.PTEID_Certif;
-import pteidlib.pteid;
-import sun.security.pkcs11.wrapper.*;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Serializable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
@@ -19,16 +21,33 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Scanner;
 import java.util.TreeMap;
+import pt.gov.cartaodecidadao.PteidException;
+import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
+import pt.ulisboa.tecnico.hdsnotary.library.Good;
+import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
+import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
+import pt.ulisboa.tecnico.hdsnotary.library.Result;
+import pt.ulisboa.tecnico.hdsnotary.library.Transfer;
+import pt.ulisboa.tecnico.hdsnotary.library.TransferException;
+import pteidlib.PTEID_Certif;
+import pteidlib.pteid;
+import sun.security.pkcs11.wrapper.CK_ATTRIBUTE;
+import sun.security.pkcs11.wrapper.CK_C_INITIALIZE_ARGS;
+import sun.security.pkcs11.wrapper.CK_MECHANISM;
+import sun.security.pkcs11.wrapper.CK_SESSION_INFO;
+import sun.security.pkcs11.wrapper.PKCS11;
+import sun.security.pkcs11.wrapper.PKCS11Constants;
+import sun.security.pkcs11.wrapper.PKCS11Exception;
 
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
 
 	private static final long serialVersionUID = 1L;
 
 	private String id;
-	private final static String keysPath = "Server/storage/Notary.p12";
-	private final static String TRANSACTIONSPATH = "Server/storage/transactions.txt";
-	private final static String SELLINGLISTPATH = "Server/storage/selling.txt";
-	private final static String TEMPFILE = "Server/storage/temp.txt";
+	private final String keysPath;
+	private final String TRANSACTIONSPATH;
+	private final String SELLINGLISTPATH;
+	private final String TEMPFILE;
 
 	// Singleton
 	private static NotaryImpl instance = null;
@@ -78,7 +97,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		this.useCC = cc;
 		this.id = id;
 
-		cryptoUtils = new CryptoUtilities(this.id, keysPath, this.id);
+		this.keysPath = "Server/storage/" + id + ".p12";
+		this.TRANSACTIONSPATH = "Server/storage/transactions" + id + ".txt";
+		this.SELLINGLISTPATH = "Server/storage/selling" + id + ".txt";
+		this.TEMPFILE = "Server/storage/temp" + id + ".txt";
+
+		cryptoUtils = new CryptoUtilities(this.id, keysPath, this.id );
 
 		int count = 0;
 
@@ -89,8 +113,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 					setupCititzenCard();
 					break;
 				} catch (CertificateException | NoSuchMethodException | SecurityException | ClassNotFoundException
-						| IllegalAccessException | IllegalArgumentException | InvocationTargetException | PteidException
-						| pteidlib.PteidException | PKCS11Exception e1) {
+					| IllegalAccessException | IllegalArgumentException | InvocationTargetException | PteidException
+					| pteidlib.PteidException | PKCS11Exception e1) {
 					System.out.println("Please insert card and press Enter");
 					scanner.nextLine();
 					count++;
@@ -127,14 +151,15 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 
-
 	/*
 	 * Generate random number only used once, for prevention of Replay Attacks and
 	 * Man-In-The-Middle
 	 */
 	@Override
 	public String getNonce(String userId) throws RemoteException {
-		if(userId == null) throw new NullPointerException(); 
+		if (userId == null) {
+			throw new NullPointerException();
+		}
 		System.out.println("Generating nonce for user " + userId);
 		String nonce = cryptoUtils.generateCNonce();
 		nonceList.put(userId, nonce);
@@ -146,10 +171,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public Result intentionToSell(String userId, String goodId, String cnonce, byte[] signature)
-			throws RemoteException {
-		if(userId == null || goodId == null || cnonce == null || signature == null) throw new NullPointerException();
-		
-		System.out.println("------ INTENTION TO SELL ------\n" + "User: " + userId + "\tGood: " + goodId);
+		throws RemoteException {
+		if (userId == null || goodId == null || cnonce == null || signature == null) {
+			throw new NullPointerException();
+		}
+
+		System.out
+			.println("------ INTENTION TO SELL ------\n" + "User: " + userId + "\tGood: " + goodId);
 
 		Good good;
 		String data = nonceList.get(userId) + cnonce + userId + goodId;
@@ -157,7 +185,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		// verifies if good exists, user owns good, good is not already for sale and
 		// signature is valid
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(userId)
-				&& !goodsToSell.contains(good.getGoodId()) && cryptoUtils.verifySignature(userId, data, signature)) {
+			&& !goodsToSell.contains(good.getGoodId()) && cryptoUtils
+			.verifySignature(userId, data, signature)) {
 			goodsToSell.add(good.getGoodId());
 			sellingListUpdate(good.getGoodId());
 			System.out.println("Result: TRUE");
@@ -176,20 +205,25 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * current owner is
 	 */
 	@Override
-	public Result stateOfGood(String userId, String cnonce, String goodId, byte[] signature) throws RemoteException {
-		
-		if(userId == null || cnonce == null || goodId == null || signature == null) throw new NullPointerException();
-		
+	public Result stateOfGood(String userId, String cnonce, String goodId, byte[] signature)
+		throws RemoteException {
+
+		if (userId == null || cnonce == null || goodId == null || signature == null) {
+			throw new NullPointerException();
+		}
+
 		System.out.println("------ STATE OF GOOD ------\nUser: " + userId + "\tGood: " + goodId);
 
 		String data = nonceList.get(userId) + cnonce + userId + goodId;
 
 		Good good;
-		if ((good = goodsList.get(goodId)) != null && cryptoUtils.verifySignature(userId, data, signature)) {
+		if ((good = goodsList.get(goodId)) != null && cryptoUtils
+			.verifySignature(userId, data, signature)) {
 			boolean status = goodsToSell.contains(goodId);
 			System.out.println("Owner: " + good.getUserId() + "\nFor Sale: " + status);
 			System.out.println("---------------------------\n");
-			return new Result(good.getUserId(), status, cnonce, cryptoUtils.signMessage(data + status));
+			return new Result(good.getUserId(), status, cnonce,
+				cryptoUtils.signMessage(data + status));
 		}
 		System.out.println("ERROR getting state of good");
 		System.out.println("---------------------------\n");
@@ -202,9 +236,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * every parameter is correct
 	 */
 	@Override
-	public Transfer transferGood(String sellerId, String buyerId, String goodId, String cnonce, byte[] signature) throws IOException, TransferException {
-		
-		if(sellerId == null || buyerId == null || goodId == null || cnonce == null || signature == null) throw new NullPointerException();
+	public Transfer transferGood(String sellerId, String buyerId, String goodId, String cnonce,
+		byte[] signature) throws IOException, TransferException {
+
+		if (sellerId == null || buyerId == null || goodId == null || cnonce == null
+			|| signature == null) {
+			throw new NullPointerException();
+		}
 
 		System.out.println("------ TRANSFER GOOD ------");
 
@@ -218,21 +256,21 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		// verifies if the good exists, if the good is owned by the seller and if it is for sale, and if the signature
 		// verifies
 
-
-		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(sellerId) && goodsToSell.contains(goodId)
-				&& cryptoUtils.verifySignature(sellerId, data, signature)) {
+		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(sellerId)
+			&& goodsToSell.contains(goodId)
+			&& cryptoUtils.verifySignature(sellerId, data, signature)) {
 			good.setUserId(buyerId);
 			goodsList.put(goodId, good);
 			goodsToSell.remove(goodId);
 			saveTransfer(sellerId, buyerId, goodId);
 			removeSelling(goodId);
-			
+
 			// Sign transfer with Cartao Do Cidadao
 			try {
-			    String toSign = transferId + buyerId + sellerId + goodId;
-                System.out.println("Verify: " + toSign);
+				String toSign = transferId + buyerId + sellerId + goodId;
+				System.out.println("Verify: " + toSign);
 				Transfer transfer = new Transfer(transferId++, buyerId, sellerId, goodId,
-						useCC ? signWithCC(toSign) : cryptoUtils.signMessage(toSign));
+					useCC ? signWithCC(toSign) : cryptoUtils.signMessage(toSign));
 				System.out.println("Result: TRUE");
 				System.out.println("---------------------------");
 				printGoods();
@@ -278,14 +316,16 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 		while ((line = inputTransactions.readLine()) != null) {
 			splitLine = line.split(";");
-			
+
 			//checks if line is well constructed
-			if(splitLine.length != 3 || splitLine[0] == null || splitLine[1] == null || splitLine[2] == null) {
+			if (splitLine.length != 3 || splitLine[0] == null || splitLine[1] == null
+				|| splitLine[2] == null) {
 				System.err.println("ERROR: Recovering line failed. Ignoring line...");
 				continue;
 			}
-				
-			System.out.println("Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
+
+			System.out.println(
+				"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
 			good = goodsList.get(splitLine[2]);
 			good.setUserId(splitLine[1]);
 			goodsList.put(splitLine[2], good);
@@ -320,19 +360,21 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		goodsList.put("good5", new Good("Charlie", "good5"));
 		goodsList.put("good6", new Good("Charlie", "good6"));
 	}
-	
+
 	private void removeSelling(String goodId) throws IOException {
 		//Remover given goodId from selling list
 		File tempFile = new File(TEMPFILE);
 		String currentLine;
 		BufferedWriter tempWriter = new BufferedWriter(new FileWriter(tempFile));
 		while ((currentLine = inputSellings.readLine()) != null) {
-		    // trim newline when comparing with lineToRemove
-		    String trimmedLine = currentLine.trim();
-		    if(trimmedLine.equals(goodId)) continue;
-		    tempWriter.write(currentLine + ("\n"));
+			// trim newline when comparing with lineToRemove
+			String trimmedLine = currentLine.trim();
+			if (trimmedLine.equals(goodId)) {
+				continue;
+			}
+			tempWriter.write(currentLine + ("\n"));
 		}
-		tempWriter.close(); 
+		tempWriter.close();
 		tempFile.renameTo(sellingListFile);
 	}
 
@@ -345,8 +387,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void printSellingList() {
-		for (String entry : goodsToSell)
+		for (String entry : goodsToSell) {
 			System.out.println("Good " + entry + " is selling");
+		}
 	}
 
 	public void stop() {
@@ -356,10 +399,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			outputSellings.close();
 			inputSellings.close();
 
-            pteid.Exit(pteid.PTEID_EXIT_LEAVE_CARD);
+			if (useCC) {
+				pteid.Exit(pteid.PTEID_EXIT_LEAVE_CARD);
+			}
 
 		} catch (IOException | pteidlib.PteidException e) {
-			System.err.println("ERROR: Closing files failed. Transactions database may not be updated");
+			System.err
+				.println("ERROR: Closing files failed. Transactions database may not be updated");
 		}
 
 	}
@@ -380,10 +426,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 
-
-	private void setupCititzenCard() throws PteidException, CertificateException, pteidlib.PteidException,
-			PKCS11Exception, NoSuchMethodException, SecurityException, ClassNotFoundException, IllegalAccessException,
-			IllegalArgumentException, InvocationTargetException {
+	private void setupCititzenCard()
+		throws PteidException, CertificateException, pteidlib.PteidException,
+		PKCS11Exception, NoSuchMethodException, SecurityException, ClassNotFoundException, IllegalAccessException,
+		IllegalArgumentException, InvocationTargetException {
 		System.loadLibrary("pteidlibj");
 		pteid.Init(""); // Initializes the eID Lib
 		pteid.SetSODChecking(false); // Don't check the integrity of the ID, address and photo (!)
@@ -397,19 +443,19 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 		certificate = getCertFromByteArray(getCertificateInBytes(0));
 
-    	Class pkcs11Class;
+		Class pkcs11Class;
 
 		pkcs11Class = Class.forName("sun.security.pkcs11.wrapper.PKCS11");
 
 		if (javaVersion.startsWith("1.5.")) {
 			Method getInstanceMethode = pkcs11Class.getDeclaredMethod("getInstance",
-					new Class[] { String.class, CK_C_INITIALIZE_ARGS.class, boolean.class });
-			pkcs11 = (PKCS11) getInstanceMethode.invoke(null, new Object[] { libName, null, false });
+				new Class[]{String.class, CK_C_INITIALIZE_ARGS.class, boolean.class});
+			pkcs11 = (PKCS11) getInstanceMethode.invoke(null, new Object[]{libName, null, false});
 		} else {
 			Method getInstanceMethode = pkcs11Class.getDeclaredMethod("getInstance",
-					new Class[] { String.class, String.class, CK_C_INITIALIZE_ARGS.class, boolean.class });
+				new Class[]{String.class, String.class, CK_C_INITIALIZE_ARGS.class, boolean.class});
 			pkcs11 = (PKCS11) getInstanceMethode.invoke(null,
-					new Object[] { libName, "C_GetFunctionList", null, false });
+				new Object[]{libName, "C_GetFunctionList", null, false});
 		}
 
 		// Open the PKCS11 session
@@ -459,7 +505,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return certificate_bytes;
 	}
 
-	public static X509Certificate getCertFromByteArray(byte[] certificateEncoded) throws CertificateException {
+	public static X509Certificate getCertFromByteArray(byte[] certificateEncoded)
+		throws CertificateException {
 		CertificateFactory f = CertificateFactory.getInstance("X.509");
 		InputStream in = new ByteArrayInputStream(certificateEncoded);
 		X509Certificate cert = (X509Certificate) f.generateCertificate(in);
@@ -468,9 +515,31 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	@Override
 	public X509Certificate getCertificate() throws RemoteException {
-	    return certificate;
-    }
+		return certificate;
+	}
 
+	@Override
+	public TreeMap<String, Boolean> connectToNotary(String userId, String cnounce,
+		X509Certificate userCert, byte[] signature)
+		throws RemoteException, InvalidSignatureException {
+		// TODO save user certificate and throw exception
+		String toVerify = nonceList.get(userId) + cnounce + userId;
+		if (cryptoUtils.verifySignature(userId, toVerify, signature)) {
+			return getGoodsFromUser(userId);
+		} else {
+			throw new InvalidSignatureException();
+		}
+	}
+
+	private TreeMap<String, Boolean> getGoodsFromUser(String userId) {
+		TreeMap<String, Boolean> map = new TreeMap<>();
+		for (Good good : goodsList.values()) {
+			if (good.getUserId().equals(userId)) {
+				map.put(good.getGoodId(), goodsToSell.contains(good.getGoodId()));
+			}
+		}
+		return map;
+	}
 
 
 }

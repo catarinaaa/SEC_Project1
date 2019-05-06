@@ -67,10 +67,10 @@
 			<artifactId>Library</artifactId>
 			<version>1.0-SNAPSHOT</version>
 		</dependency>
-		<dependency>
+		<!--<dependency>
 			<groupId>pt.gov</groupId>
 			<artifactId>pteidlibj</artifactId>
 			<version>1.0</version>
-		</dependency>
+		</dependency> -->
 	</dependencies>
 </project>

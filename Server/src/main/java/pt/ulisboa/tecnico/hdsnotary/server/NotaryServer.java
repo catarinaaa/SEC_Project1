@@ -9,23 +9,30 @@ public class NotaryServer {
 
 	public static void main(String[] args) {
 		int port = 3000;
-		boolean useCC = true;
+		boolean useCC;
+		String id;
 
-		if(args.length == 1) {
-			useCC = Boolean.parseBoolean(args[0]);
+		if(args.length == 2) {
+			id = args[0];
+			useCC = Boolean.parseBoolean(args[1]);
+		}
+		else {
+			System.out.println("Error in arguments");
+			return;
 		}
 
-		try {
-			NotaryImpl obj = NotaryImpl.getInstance(useCC, "Notary");
 
-			reg = LocateRegistry.createRegistry(port);
-			reg.rebind("Notary", obj);
+		try {
+			NotaryImpl obj = NotaryImpl.getInstance(useCC, id);
+
+			reg = LocateRegistry.getRegistry(port);
+			reg.rebind(id, obj);
 
 			for (String s : reg.list()) {
 				System.out.println("> " + s);
 			}
 			
-			System.out.println("Server ready!");
+			System.out.println(id + " is ready!");
 
 			System.out.println("Awaiting connections");
 			System.out.println("Press enter to shutdown");
@@ -37,7 +44,7 @@ public class NotaryServer {
 		} catch (Exception e) {
 			System.err.println("ERROR: Aborting...");
 			e.printStackTrace();
-			return;
+			System.exit(1);
 		}
 
 	}

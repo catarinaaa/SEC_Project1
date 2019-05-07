@@ -20,7 +20,7 @@ public interface NotaryInterface extends Remote {
 		byte[] signature)
 		throws RemoteException, IOException, TransferException;
 
-	X509Certificate getCertificate() throws RemoteException;
+	X509Certificate getCertificateCC() throws RemoteException;
 
 	X509Certificate connectToNotary(String userId, String cnonce, X509Certificate userCert,
 		byte[] signature) throws RemoteException, InvalidSignatureException;

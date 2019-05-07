@@ -19,6 +19,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.TreeMap;
 import pt.gov.cartaodecidadao.PteidException;
@@ -54,9 +55,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	// List containing all goods
 	private TreeMap<String, Good> goodsList = new TreeMap<>();
-
-	// List containing goods that are for sale
-	private ArrayList<String> goodsToSell = new ArrayList<>();
 
 	// List containing nonces for security
 	private TreeMap<String, String> nonceList = new TreeMap<>();
@@ -185,9 +183,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		// verifies if good exists, user owns good, good is not already for sale and
 		// signature is valid
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(userId)
-			&& !goodsToSell.contains(good.getGoodId()) && cryptoUtils
-			.verifySignature(userId, data, signature)) {
-			goodsToSell.add(good.getGoodId());
+			&& !good.forSale() && cryptoUtils.verifySignature(userId, data, signature)) {
+			good.setForSale();
+			goodsList.put(goodId, good);
 			sellingListUpdate(good.getGoodId());
 			System.out.println("Result: TRUE");
 			System.out.println("-------------------------------\n");
@@ -219,7 +217,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		Good good;
 		if ((good = goodsList.get(goodId)) != null && cryptoUtils
 			.verifySignature(userId, data, signature)) {
-			boolean status = goodsToSell.contains(goodId);
+			boolean status = good.forSale();
 			System.out.println("Owner: " + good.getUserId() + "\nFor Sale: " + status);
 			System.out.println("---------------------------\n");
 			return new Result(good.getUserId(), status, cnonce,
@@ -257,11 +255,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		// verifies
 
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(sellerId)
-			&& goodsToSell.contains(goodId)
-			&& cryptoUtils.verifySignature(sellerId, data, signature)) {
+			&& good.forSale() && cryptoUtils.verifySignature(sellerId, data, signature)) {
 			good.setUserId(buyerId);
+			good.notForSale();
 			goodsList.put(goodId, good);
-			goodsToSell.remove(goodId);
 			saveTransfer(sellerId, buyerId, goodId);
 			removeSelling(goodId);
 
@@ -303,7 +300,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		while ((line = inputSellings.readLine()) != null) {
 			System.out.println("--> " + line);
 			System.out.println("GoodId: " + line);
-			goodsToSell.add(line);
+			Good good = goodsList.get(line);
+			good.setForSale();
+			goodsList.put(line, good);
 		}
 
 	}
@@ -386,11 +385,15 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		System.out.println("-------------------------\n");
 	}
 
-	private void printSellingList() {
-		for (String entry : goodsToSell) {
-			System.out.println("Good " + entry + " is selling");
-		}
-	}
+//	private void printSellingList() {
+//		for(Map.Entry<String,Good> entry : goodsList.entrySet()) {
+//			  String goodId = entry.getKey();
+//			  Good good = entry.getValue();
+//			  
+//			  if (good.forSale())
+//				  System.out.println("Good " + goodId + " is selling");
+//		}
+//	}
 
 	public void stop() {
 		try {
@@ -535,7 +538,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		TreeMap<String, Boolean> map = new TreeMap<>();
 		for (Good good : goodsList.values()) {
 			if (good.getUserId().equals(userId)) {
-				map.put(good.getGoodId(), goodsToSell.contains(good.getGoodId()));
+				map.put(good.getGoodId(), good.forSale());
 			}
 		}
 		return map;

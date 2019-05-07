@@ -3,11 +3,13 @@ package pt.ulisboa.tecnico.hdsnotary.library;
 public class Good {
 	private String userId;
 	private String goodId;
+	private Boolean forSale;
 	
 	public Good(String userId, String goodId) {
 		super();
 		this.userId = userId;
 		this.goodId = goodId;
+		this.forSale = false;
 	}
 	
 	public String getUserId() {
@@ -21,5 +23,17 @@ public class Good {
 	}
 	public void setGoodId(String goodId) {
 		this.goodId = goodId;
+	}
+
+	public Boolean forSale() {
+		return forSale;
+	}
+
+	public void setForSale() {
+		this.forSale = true;
+	}
+	
+	public void notForSale() {
+		this.forSale = false;
 	}
 }

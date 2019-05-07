@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsnotary.library;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 public class Good implements Serializable {
 	private String userId;
@@ -52,5 +53,10 @@ public class Good implements Serializable {
 	@Override
 	public String toString() {
 		return "GoodID: " + goodId + "\nUserID: " + userId + "\nFor Sale: " + forSale + "\nTimeStamp: " + writeTimestamp;
+	}
+	
+	@Override
+	public int hashCode() {
+		return Objects.hash(goodId, userId, forSale, writeTimestamp);
 	}
 }

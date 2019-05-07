@@ -145,8 +145,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
         }
         System.out.println("Goods owned:");
         for (String s : map.keySet()) {
-            System.out.println("HashCode: " + map.get(s).hashCode());
-            System.out.println(map.get(s));
             System.out.println("> " + s);
         }
         goods = map;

@@ -543,8 +543,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		TreeMap<String, Good> map = new TreeMap<>();
 		for (Good good : goodsList.values()) {
 			if (good.getUserId().equals(userId)) {
-				System.out.println("HashCode: " + good.hashCode());
-				System.out.println(good);
 				map.put(good.getGoodId(), good);
 			}
 		}

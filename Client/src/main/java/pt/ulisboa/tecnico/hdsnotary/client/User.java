@@ -19,7 +19,6 @@ import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
 import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
 import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
 import pt.ulisboa.tecnico.hdsnotary.library.Result;
-import pt.ulisboa.tecnico.hdsnotary.library.SignatureNotFoundException;
 import pt.ulisboa.tecnico.hdsnotary.library.Transfer;
 import pt.ulisboa.tecnico.hdsnotary.library.TransferException;
 import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
@@ -237,7 +236,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	public boolean buying(String goodId) {
 		try {
 			Result stateOfGood = stateOfGood(goodId);
-			if (stateOfGood == null || false == stateOfGood.getResult()) {
+			if (stateOfGood == null || false == (Boolean)stateOfGood.getContent()) {
 				System.out.println("ERROR: Buying was not possible!");
 				System.out.println("------------------");
 				return false;
@@ -306,15 +305,15 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				lastNotary = notaryID;
 			}
 			if (result != null && cryptoUtils
-				.verifySignature(lastNotary, data + result.getResult(), result.getSignature())) {
-				if (result.getResult()) {
+				.verifySignature(lastNotary, data + result.getContent().hashCode(), result.getSignature())) {
+				if ((Boolean)result.getContent()) {
 					goods.replace(goodId, true);
 					System.out.println("Result: " + goodId + " is now for sale");
 				} else {
 					System.out.println("Result: Invalid good");
 				}
 				System.out.println("-----------------------------");
-				return result.getResult();
+				return (Boolean)result.getContent();
 			} else {
 				System.err.println("ERROR: Signature does not verify");
 				System.out.println("-----------------------------");
@@ -347,9 +346,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				lastNotary = notaryID;
 			}
 			if (cryptoUtils
-				.verifySignature(lastNotary, data + result.getResult(), result.getSignature())) {
+				.verifySignature(lastNotary, data + result.getContent().hashCode(), result.getSignature())) {
 				System.out.println("Owner: " + result.getUserId());
-				System.out.println("For sale: " + result.getResult());
+				System.out.println("For sale: " + (Boolean)result.getContent());
 				System.out.println("-------------------------");
 				return result;
 			} else {

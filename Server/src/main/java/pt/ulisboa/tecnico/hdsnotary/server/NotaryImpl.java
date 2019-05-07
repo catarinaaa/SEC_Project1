@@ -193,13 +193,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			sellingListUpdate(good.getGoodId());
 			System.out.println("Result: TRUE");
 			System.out.println("-------------------------------\n");
-			return new Result(true, cnonce, cryptoUtils.signMessage(data + "true"));
+			return new Result(new Boolean(true), cryptoUtils.signMessage(data + new Boolean(true).hashCode()));
+		} else {
+			System.out.println("Result: FALSE");
+			System.out.println("-------------------------------\n");
+			return new Result(new Boolean(false), cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
 		}
-
-		System.out.println("Result: FALSE");
-		System.out.println("-------------------------------\n");
-		return new Result(false, cnonce, cryptoUtils.signMessage(data + "false"));
-
 	}
 
 	/*
@@ -221,15 +220,15 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		Good good;
 		if ((good = goodsList.get(goodId)) != null && cryptoUtils
 			.verifySignature(userId, data, signature)) {
-			boolean status = goodsToSell.contains(goodId);
+			Boolean status = new Boolean(goodsToSell.contains(goodId));
 			System.out.println("Owner: " + good.getUserId() + "\nFor Sale: " + status);
 			System.out.println("---------------------------\n");
 			return new Result(good.getUserId(), status, cnonce,
-				cryptoUtils.signMessage(data + status));
+				cryptoUtils.signMessage(data + status.hashCode()));
 		}
 		System.out.println("ERROR getting state of good");
 		System.out.println("---------------------------\n");
-		return new Result(false, cnonce, cryptoUtils.signMessage(data + "false"));
+		return new Result(null, new Boolean(false), cnonce, cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
 
 	}
 
@@ -489,7 +488,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	// Returns the CITIZEN AUTHENTICATION CERTIFICATE
 	public static byte[] getCitizenAuthCertInBytes() {
-		return getCertificateInBytes(0); // certificado 0 no Cartao do Cidadao eh o de autenticacao
+		return getCertificateInBytes(0);
 	}
 
 	// Returns the n-th certificate, starting from 0
@@ -499,7 +498,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			PTEID_Certif[] certs = pteid.GetCertificates();
 			int i = 0;
 
-			certificate_bytes = certs[n].certif; // gets the byte[] with the n-th certif
+			certificate_bytes = certs[n].certif;
 
 		} catch (pteidlib.PteidException e) {
 			e.printStackTrace();
@@ -545,6 +544,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 		//return result signed
 		String data = toVerify + map.hashCode();
-		return new Result(null, false, map, cnonce, cryptoUtils.signMessage(data));
+		return new Result(map, cryptoUtils.signMessage(data));
 	}
 }

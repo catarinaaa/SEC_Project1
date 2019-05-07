@@ -9,6 +9,7 @@ public class Result implements Serializable {
 	 */
 	private static final long serialVersionUID = 1L;
 	
+	private Object content;
 	private String userId;
 	private Boolean result;
 	private Transfer transfer;
@@ -39,6 +40,19 @@ public class Result implements Serializable {
 		this.result = result;
 		this.cnonce = cnonce;
 		this.signature = signature;
+	}
+	
+	public Result(String userId, Boolean result, Object content, String cnonce, byte[] signature) {
+		super();
+		this.userId = userId;
+		this.result = result;
+		this.content = content;
+		this.cnonce = cnonce;
+		this.signature = signature;
+	}
+	
+	public Object getContent() {
+		return content;
 	}
 	
 	public Boolean getResult() {

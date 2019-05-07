@@ -35,6 +35,7 @@ public class CryptoUtilities {
 	
 	private HashMap<String, String> passwordsKeyStores = new HashMap<>();
 	private HashMap<String, String> certPathsList = new HashMap<>();
+	private HashMap<String, X509Certificate> certList = new HashMap<String, X509Certificate>();
 	
 	Scanner scanner = new Scanner(System.in);
 	

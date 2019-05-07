@@ -22,6 +22,9 @@ public interface NotaryInterface extends Remote {
 
 	X509Certificate getCertificate() throws RemoteException;
 
-	TreeMap<String, Boolean> connectToNotary(String userId, String cnonce, X509Certificate userCert,
+	X509Certificate connectToNotary(String userId, String cnonce, X509Certificate userCert,
 		byte[] signature) throws RemoteException, InvalidSignatureException;
+	
+	Result getGoodsFromUser(String userId, String cnonce, byte[] signature) 
+			throws RemoteException, InvalidSignatureException;
 }

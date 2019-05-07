@@ -9,6 +9,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -38,6 +39,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	private Map<String, Boolean> goods;
 	// Instance of remote Notary Object
 	private TreeMap<String, NotaryInterface> notaryServers;
+	private HashMap<String, X509Certificate> certList = new HashMap<String, X509Certificate>();
 
 
 	private String keysPath; // KeyStore location
@@ -66,21 +68,50 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		System.out.println("Initializing user " + id);
 
 		connectToNotary();
-
+		
+		getGoodFromUser();
+		
 	}
 
 	/*
 	 * Function to obtain goods owned by the user
 	 */
 	private void connectToNotary() throws RemoteException, InvalidSignatureException {
-		TreeMap<String, Boolean> map = null;
 		// TODO verify signatures
-		for (NotaryInterface notary : notaryServers.values()) {
+		for(String notaryID : notaryServers.keySet()) {
+			NotaryInterface notary = notaryServers.get(notaryID);
+			
 			String cnonce = cryptoUtils.generateCNonce();
 			String toSign = notary.getNonce(this.id) + cnonce + this.id;
-			map = notary
+			X509Certificate res = notary
 				.connectToNotary(this.id, cnonce, null, cryptoUtils.signMessage(toSign));
+			certList.put(notaryID, res);
 			System.out.println("Response");
+		}
+		System.out.println(certList.get("Notary1"));
+	}
+
+	public void getGoodFromUser() throws RemoteException {
+		TreeMap<String, Boolean> map = null;
+
+		for(String notaryID : notaryServers.keySet()) {
+			NotaryInterface notary = notaryServers.get(notaryID);
+			//send signed message
+			String cnonce = cryptoUtils.generateCNonce();
+			String toSign = notary.getNonce(this.id) + cnonce + this.id;
+			Result res = null;
+			try {
+				res = notary.getGoodsFromUser(this.id, cnonce, cryptoUtils.signMessage(toSign));
+			} catch(InvalidSignatureException e) {
+				e.getMessage();
+			} finally { System.out.println("Response"); }
+			
+			//verify received message
+			String toVerify = toSign + res.getContent().hashCode();
+
+			if (!cryptoUtils.verifySignature(notaryID, toVerify, res.getSignature())) {
+				System.err.println("ERROR: Signature could not be verified");
+			}
 		}
 
 		System.out.println("Goods owned:");
@@ -89,7 +120,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		}
 		goods = map;
 	}
-
+	
 	public String getUser2() {
 		return user2;
 	}

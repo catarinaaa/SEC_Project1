@@ -19,6 +19,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Scanner;
 import java.util.TreeMap;
 import pt.gov.cartaodecidadao.PteidException;
@@ -48,6 +49,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private final String TRANSACTIONSPATH;
 	private final String SELLINGLISTPATH;
 	private final String TEMPFILE;
+	private HashMap<String, X509Certificate> certList = new HashMap<String, X509Certificate>();
 
 	// Singleton
 	private static NotaryImpl instance = null;
@@ -93,7 +95,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private NotaryImpl(boolean cc, String id) throws RemoteException, KeyStoreException {
 		super();
 		populateList();
-		Scanner scanner = new Scanner(System.in);
 		this.useCC = cc;
 		this.id = id;
 
@@ -102,8 +103,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		this.SELLINGLISTPATH = "Server/storage/selling" + id + ".txt";
 		this.TEMPFILE = "Server/storage/temp" + id + ".txt";
 
-		cryptoUtils = new CryptoUtilities(this.id, keysPath, this.id );
+		cryptoUtils = new CryptoUtilities(this.id, keysPath, this.id);
 
+		
+		Scanner scanner = new Scanner(System.in);
 		int count = 0;
 
 		if (cc) {
@@ -519,27 +522,35 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public TreeMap<String, Boolean> connectToNotary(String userId, String cnounce,
+	public X509Certificate connectToNotary(String userId, String cnounce,
 		X509Certificate userCert, byte[] signature)
 		throws RemoteException, InvalidSignatureException {
 		// TODO save user certificate and throw exception
+		certList.put(userId, userCert);
 		String toVerify = nonceList.get(userId) + cnounce + userId;
 		if (cryptoUtils.verifySignature(userId, toVerify, signature)) {
-			return getGoodsFromUser(userId);
+			return getCertificate(); //TODO
 		} else {
 			throw new InvalidSignatureException();
 		}
 	}
 
-	private TreeMap<String, Boolean> getGoodsFromUser(String userId) {
+	@Override
+	public Result getGoodsFromUser(String userId, String cnonce, byte[] signature) throws RemoteException, InvalidSignatureException {
+		//verify sender
+		String toVerify = nonceList.get(userId) + cnonce + userId;
+		if(!cryptoUtils.verifySignature(userId, toVerify, signature))
+			throw new InvalidSignatureException();
+		
+		//process
 		TreeMap<String, Boolean> map = new TreeMap<>();
 		for (Good good : goodsList.values()) {
 			if (good.getUserId().equals(userId)) {
 				map.put(good.getGoodId(), goodsToSell.contains(good.getGoodId()));
 			}
 		}
-		return map;
+		//return result signed
+		String data = toVerify + map.hashCode();
+		return new Result(null, false, map, cnonce, cryptoUtils.signMessage(data));
 	}
-
-
 }

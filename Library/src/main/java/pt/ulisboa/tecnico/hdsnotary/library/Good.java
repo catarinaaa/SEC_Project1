@@ -1,6 +1,8 @@
 package pt.ulisboa.tecnico.hdsnotary.library;
 
-public class Good {
+import java.io.Serializable;
+
+public class Good implements Serializable {
 	private String userId;
 	private String goodId;
 	private Boolean forSale;
@@ -45,5 +47,10 @@ public class Good {
 
 	public void setWriteTimestamp(int writeTimestamp) {
 		this.writeTimestamp = writeTimestamp;
+	}
+
+	@Override
+	public String toString() {
+		return "GoodID: " + goodId + "\nUserID: " + userId + "\nFor Sale: " + forSale + "\nTimeStamp: " + writeTimestamp;
 	}
 }

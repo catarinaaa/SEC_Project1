@@ -305,7 +305,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			System.out.println("GoodId: " + line);
 			Good good = goodsList.get(line);
 			good.setForSale();
-			goodsList.put(line, good);
 		}
 
 	}
@@ -544,11 +543,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		TreeMap<String, Good> map = new TreeMap<>();
 		for (Good good : goodsList.values()) {
 			if (good.getUserId().equals(userId)) {
+				System.out.println("HashCode: " + good.hashCode());
+				System.out.println(good);
 				map.put(good.getGoodId(), good);
 			}
 		}
 		//return result signed
 		String data = toVerify + map.hashCode();
+		System.out.println("To Verify: " + data);
 		return new Result(map, cryptoUtils.signMessage(data));
 	}
 }

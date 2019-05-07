@@ -137,6 +137,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
             //verify received message
             String toVerify = toSign + res.getContent().hashCode();
+            System.out.println("To Verify: " + toVerify);
             if (!cryptoUtils.verifySignature(notaryID, toVerify, res.getSignature())) {
                 System.err.println("ERROR: Signature could not be verified");
             }
@@ -144,6 +145,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
         }
         System.out.println("Goods owned:");
         for (String s : map.keySet()) {
+            System.out.println("HashCode: " + map.get(s).hashCode());
+            System.out.println(map.get(s));
             System.out.println("> " + s);
         }
         goods = map;

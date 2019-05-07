@@ -12,16 +12,19 @@ import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.sql.Timestamp;
 import java.security.UnrecoverableEntryException;
 import java.security.KeyStore.PrivateKeyEntry;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Scanner;
 
 public class CryptoUtilities {
 	
 	private static final String SIGNATURE_ALGORITHM = "SHA256withRSA";
+	private static final int MAX_DELAY_TIME = 30*1000; //30 seconds
 
 	private SecureRandom secRandom = new SecureRandom();
 	

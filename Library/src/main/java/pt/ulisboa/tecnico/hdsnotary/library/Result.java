@@ -15,7 +15,7 @@ public class Result implements Serializable {
 	private String cnonce;
 	private byte[] signature;
 	private int writeTimestamp;
-	
+	private Good good;
 
 	public Result(String userId, Object content, String cnonce, byte[] signature) {
 		super();
@@ -59,5 +59,5 @@ public class Result implements Serializable {
 		this.writeTimestamp = writeTimestamp;
 	}
 	
-	
+	public Good getGood() { return good; }
 }

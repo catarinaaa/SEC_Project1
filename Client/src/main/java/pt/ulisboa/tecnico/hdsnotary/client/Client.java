@@ -154,6 +154,7 @@ public class Client {
 		list.put("Notary1", (NotaryInterface) Naming.lookup("//localhost:3000/Notary1"));
 		list.put("Notary2", (NotaryInterface) Naming.lookup("//localhost:3000/Notary2"));
 		list.put("Notary3", (NotaryInterface) Naming.lookup("//localhost:3000/Notary3"));
+		list.put("Notary4", (NotaryInterface) Naming.lookup("//localhost:3000/Notary4"));
 		return list;
 	}
 }

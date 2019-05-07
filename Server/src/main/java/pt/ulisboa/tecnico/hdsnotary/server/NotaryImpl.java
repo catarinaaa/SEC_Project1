@@ -49,8 +49,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private final String TRANSACTIONSPATH;
 	private final String SELLINGLISTPATH;
 	private final String TEMPFILE;
-	private HashMap<String, X509Certificate> certList = new HashMap<String, X509Certificate>();
-
+	
 	// Singleton
 	private static NotaryImpl instance = null;
 
@@ -517,22 +516,17 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public X509Certificate getCertificate() throws RemoteException {
+	public X509Certificate getCertificateCC() throws RemoteException {
 		return certificate;
 	}
 
 	@Override
 	public X509Certificate connectToNotary(String userId, String cnounce,
-		X509Certificate userCert, byte[] signature)
-		throws RemoteException, InvalidSignatureException {
-		// TODO save user certificate and throw exception
-		certList.put(userId, userCert);
-		String toVerify = nonceList.get(userId) + cnounce + userId;
-		if (cryptoUtils.verifySignature(userId, toVerify, signature)) {
-			return getCertificate(); //TODO
-		} else {
-			throw new InvalidSignatureException();
-		}
+		X509Certificate userCert, byte[] signature) throws RemoteException, InvalidSignatureException {
+		// TODO verify certificate signature
+		cryptoUtils.addCertToList(userId, userCert);
+		return cryptoUtils.getStoredCert();
+
 	}
 
 	@Override

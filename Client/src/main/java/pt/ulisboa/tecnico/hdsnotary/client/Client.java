@@ -134,7 +134,7 @@ public class Client {
 			}
 
 		} catch (NotBoundException | IOException e) {
-//			e.printStackTrace();
+			e.printStackTrace();
 			System.err.println("ERROR locating Notary servers");
 		} catch (KeyStoreException e) {
 			System.err.println("ERROR creating user, cryptoUtils error");

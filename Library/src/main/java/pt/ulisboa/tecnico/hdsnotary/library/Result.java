@@ -17,13 +17,6 @@ public class Result implements Serializable {
 	private int writeTimestamp;
 	
 
-	public Result(String userId, Boolean result, String cnonce, byte[] signature) {
-		super();
-		this.userId = userId;
-		this.cnonce = cnonce;
-		this.signature = signature;
-	}
-	
 	public Result(String userId, Object content, String cnonce, byte[] signature) {
 		super();
 		this.userId = userId;

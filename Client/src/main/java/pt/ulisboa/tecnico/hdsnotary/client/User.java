@@ -18,13 +18,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.*;
 
-import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
-import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
-import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
-import pt.ulisboa.tecnico.hdsnotary.library.Result;
-import pt.ulisboa.tecnico.hdsnotary.library.Transfer;
-import pt.ulisboa.tecnico.hdsnotary.library.TransferException;
-import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
+import pt.ulisboa.tecnico.hdsnotary.library.*;
 
 public class User extends UnicastRemoteObject implements UserInterface {
 
@@ -44,7 +38,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
     private UserInterface remoteUser2 = null;
     private UserInterface remoteUser3 = null;
     // List of all goods possessed
-    private Map<String, Boolean> goods;
+    private Map<String, Good> goods;
 
     // List of timestamps per good
     private Map<String, Integer> writeTimeStamps;
@@ -106,7 +100,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
     }
 
     public void getGoodFromUser() throws RemoteException {
-        TreeMap<String, Boolean> map = null;
+        TreeMap<String, Good> map = null;
 
         for (String notaryID : notaryServers.keySet()) {
             NotaryInterface notary = notaryServers.get(notaryID);
@@ -127,7 +121,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
             if (!cryptoUtils.verifySignature(notaryID, toVerify, res.getSignature())) {
                 System.err.println("ERROR: Signature could not be verified");
             }
-            map = (TreeMap<String, Boolean>) res.getContent();
+            map = (TreeMap<String, Good>) res.getContent();
         }
         System.out.println(map);
         System.out.println("Goods owned:");
@@ -149,13 +143,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
         return id;
     }
 
-    public Map<String, Boolean> getGoods() {
+    public Map<String, Good> getGoods() {
         return goods;
     }
 
-    public void addGood(String goodId, boolean bool) {
-        goods.put(goodId, bool);
-    }
 
     /*
      * Function to obtain a nonce for communication
@@ -198,8 +189,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
             }
 
             String transferVerify =
-                    result.getId() + result.getBuyerId() + result.getSellerId() + result
-                            .getGoodId();
+                    result.getId() + result.getBuyerId() + result.getSellerId() + result.getGood().getGoodId();
 
             if (!verifyCC || cryptoUtils
                     .verifySignature(NOTARY_CC, transferVerify, result.getNotarySignature(),
@@ -244,6 +234,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
                     String toSign = nonce + cnonce + this.id + goodId;
                     result = remoteUser2
                             .buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
+                    goods.put(goodId, result.getGood());
                 } else if (seller.equals(user3) && remoteUser3 != null) {
                     String nonce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
                     String cnonce = cryptoUtils.generateCNonce();
@@ -251,9 +242,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
                     String toSign = nonce + cnonce + this.id + goodId;
                     result = remoteUser3
                             .buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
+                    goods.put(goodId, result.getGood());
                 }
 
-                goods.put(goodId, false);
                 System.out.println("SUCCESSFUL BUY");
                 System.out.println(goodId + " was added to the list of goods!");
                 System.out.println("------------------");
@@ -328,7 +319,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
         if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
             System.out.println("AcksList: " + acksList.size());
-            goods.replace(goodId, true);
+            goods.get(goodId).setForSale();
             return true;
         } else {
             System.out.println("FailedAcksList: " + failedAcksList.size());
@@ -389,7 +380,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
      */
     public void listGoods() {
         for (String goodId : goods.keySet()) {
-            Boolean value = goods.get(goodId);
+            Boolean value = goods.get(goodId).forSale();
             System.out.println(goodId + " --> For sale: " + value);
         }
     }

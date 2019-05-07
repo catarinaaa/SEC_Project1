@@ -4,12 +4,14 @@ public class Good {
 	private String userId;
 	private String goodId;
 	private Boolean forSale;
+	private int writeTimestamp;
 	
 	public Good(String userId, String goodId) {
 		super();
 		this.userId = userId;
 		this.goodId = goodId;
 		this.forSale = false;
+		this.writeTimestamp = 0;
 	}
 	
 	public String getUserId() {
@@ -35,5 +37,13 @@ public class Good {
 	
 	public void notForSale() {
 		this.forSale = false;
+	}
+
+	public int getWriteTimestamp() {
+		return writeTimestamp;
+	}
+
+	public void setWriteTimestamp(int writeTimestamp) {
+		this.writeTimestamp = writeTimestamp;
 	}
 }

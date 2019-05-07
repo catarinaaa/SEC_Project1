@@ -15,7 +15,8 @@ public class Result implements Serializable {
 	private Transfer transfer;
 	private String cnonce;
 	private byte[] signature;
-	
+	private Good good;
+
 	public Result(Boolean result, String cnonce, byte[] signature) {
 		super();
 		this.userId = null;
@@ -74,4 +75,6 @@ public class Result implements Serializable {
 	public String getCnonce() {
 		return cnonce;
 	}
+
+	public Good getGood() { return good; }
 }

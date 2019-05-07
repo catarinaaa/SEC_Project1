@@ -269,7 +269,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			try {
 				String toSign = transferId + buyerId + sellerId + goodId;
 				System.out.println("Verify: " + toSign);
-				Transfer transfer = new Transfer(transferId++, buyerId, sellerId, goodId,
+				Transfer transfer = new Transfer(transferId++, buyerId, sellerId, good,
 					useCC ? signWithCC(toSign) : cryptoUtils.signMessage(toSign));
 				System.out.println("Result: TRUE");
 				System.out.println("---------------------------");
@@ -546,10 +546,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			throw new InvalidSignatureException();
 		
 		//process
-		TreeMap<String, Boolean> map = new TreeMap<>();
+		TreeMap<String, Good> map = new TreeMap<>();
 		for (Good good : goodsList.values()) {
 			if (good.getUserId().equals(userId)) {
-				map.put(good.getGoodId(), good.forSale());
+				map.put(good.getGoodId(), good);
 			}
 		}
 		//return result signed

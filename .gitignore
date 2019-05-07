@@ -46,3 +46,6 @@ log/
 
 # Cartao do Cidadao KeyStore
 CertCC.p12 
+
+# runRMIRegistry.sh - specific classpath for each user
+runRMIRegistry.sh

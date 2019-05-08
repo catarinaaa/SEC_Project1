@@ -54,7 +54,7 @@ public class Good implements Serializable {
 	public String toString() {
 		return "GoodID: " + goodId + "\nUserID: " + userId + "\nFor Sale: " + forSale + "\nTimeStamp: " + writeTimestamp;
 	}
-	
+
 	@Override
 	public int hashCode() {
 		return Objects.hash(goodId, userId, forSale, writeTimestamp);

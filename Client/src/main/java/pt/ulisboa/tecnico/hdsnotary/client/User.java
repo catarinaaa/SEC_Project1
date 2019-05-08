@@ -299,6 +299,16 @@ public class User extends UnicastRemoteObject implements UserInterface {
      */
 
     public synchronized boolean intentionSell(String goodId) {
+        Good goodToSell = goods.get(goodId);
+        if(goodToSell == null) {
+            System.out.println("ERROR: Good not found!");
+            return false;
+        }
+
+        final int writeTimeStamp = goodToSell.getWriteTimestamp() + 1;
+
+        System.out.println("WriteTimeStamp: " + writeTimeStamp);
+
         ConcurrentHashMap<String, Result> acksList = new ConcurrentHashMap<>();
         ConcurrentHashMap<String, Result> failedAcksList = new ConcurrentHashMap<>();
 
@@ -313,11 +323,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
                     String data = nonce + cnonce + this.id + goodId;
 
                     Result result = notary
-                            .intentionToSell(this.id, goodId, cnonce, cryptoUtils.signMessage(data));
+                            .intentionToSell(this.id, goodId, writeTimeStamp, cnonce, cryptoUtils.signMessage(data));
 
                     if (result != null && cryptoUtils
                             .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature())) {
-                        if ((Boolean) result.getContent()) {
+                        System.out.println("Recived WriteTimeStamp: " + result.getWriteTimestamp());
+                        if ((Boolean) result.getContent() && result.getWriteTimestamp() == writeTimeStamp) {
                             acksList.put(notaryID, result);
                             awaitSignal.countDown();
                             System.out.println("NotaryID: " + notaryID + "\nResult: " + (Boolean) result.getContent());
@@ -352,6 +363,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
         if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
             System.out.println("AcksList: " + acksList.size());
             goods.get(goodId).setForSale();
+            goodToSell.setWriteTimestamp(writeTimeStamp);
             return true;
         } else {
             System.out.println("FailedAcksList: " + failedAcksList.size());

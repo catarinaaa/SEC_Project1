@@ -170,7 +170,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * Invoked when a user wants to sell a particular good
 	 */
 	@Override
-	public Result intentionToSell(String userId, String goodId, String cnonce, byte[] signature)
+	public Result intentionToSell(String userId, String goodId, int writeTimeStamp, String cnonce, byte[] signature)
 		throws RemoteException {
 		if (userId == null || goodId == null || cnonce == null || signature == null) {
 			throw new NullPointerException();
@@ -178,24 +178,24 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 		System.out
 			.println("------ INTENTION TO SELL ------\n" + "User: " + userId + "\tGood: " + goodId);
-
 		Good good;
 		String data = nonceList.get(userId) + cnonce + userId + goodId;
 
 		// verifies if good exists, user owns good, good is not already for sale and
 		// signature is valid
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(userId)
-			&& !good.forSale() && cryptoUtils.verifySignature(userId, data, signature)) {
+			&& !good.forSale() && cryptoUtils.verifySignature(userId, data, signature) && writeTimeStamp > good.getWriteTimestamp()) {
 			good.setForSale();
+			good.setWriteTimestamp(writeTimeStamp);
 			goodsList.put(goodId, good);
 			sellingListUpdate(good.getGoodId());
 			System.out.println("Result: TRUE");
 			System.out.println("-------------------------------\n");
-			return new Result(new Boolean(true), cryptoUtils.signMessage(data + new Boolean(true).hashCode()));
+			return new Result(new Boolean(true), good.getWriteTimestamp(), cryptoUtils.signMessage(data + new Boolean(true).hashCode()));
 		} else {
 			System.out.println("Result: FALSE");
 			System.out.println("-------------------------------\n");
-			return new Result(new Boolean(false), cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
+			return new Result(new Boolean(false), good.getWriteTimestamp(), cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
 		}
 	}
 
@@ -223,12 +223,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 			System.out.println("Owner: " + good.getUserId() + "\nFor Sale: " + status);
 			System.out.println("---------------------------\n");
-			return new Result(good.getUserId(), status, cnonce,
+			// TODO change result
+			return new Result(good.getUserId(), status, 0,
 				cryptoUtils.signMessage(data + status.hashCode()));
 		}
 		System.out.println("ERROR getting state of good");
 		System.out.println("---------------------------\n");
-		return new Result(null, new Boolean(false), cnonce, cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
+		// TODO change result
+		return new Result(null, new Boolean(false), 0, cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
 
 	}
 

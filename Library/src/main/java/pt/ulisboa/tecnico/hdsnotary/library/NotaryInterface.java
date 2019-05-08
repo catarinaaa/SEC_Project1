@@ -10,7 +10,7 @@ public interface NotaryInterface extends Remote {
 
 	String getNonce(String userId) throws RemoteException;
 
-	Result intentionToSell(String userId, String goodId, String cnonce, byte[] signature)
+	Result intentionToSell(String userId, String goodId, int writeTimeStamp, String cnonce, byte[] signature)
 		throws RemoteException;
 
 	Result stateOfGood(String userId, String cnonce, String goodId, byte[] signature)

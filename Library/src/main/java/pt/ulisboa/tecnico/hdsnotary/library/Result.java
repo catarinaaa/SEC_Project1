@@ -60,4 +60,13 @@ public class Result implements Serializable {
 	}
 	
 	public Good getGood() { return good; }
+	
+	@Override
+	public boolean equals(Object o) {
+		Result r = (Result) o;
+		System.out.println(userId + " " +content + " " +r.getUserId() + " " +r.getContent());
+		if(userId == null || content == null || r.getUserId() == null || r.getContent() == null)
+			return false;
+        return (userId.equals(r.getUserId()) && content.equals(r.getContent()));
+	}
 }

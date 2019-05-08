@@ -362,35 +362,75 @@ public class User extends UnicastRemoteObject implements UserInterface {
     /*
      * Invoked to get current state of a good, it returns the current owner and if it is for sale or not
      */
-    public Result stateOfGood(String goodId) {
+    public synchronized Result stateOfGood(String goodId) {
+    	ConcurrentHashMap<Result, Integer> acksList = new ConcurrentHashMap<Result, Integer>();
+
+        CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
+        for (String notaryID : notaryServers.keySet()) {
+            service.execute(() -> {
+            	try {
+                    Result result;
+	            	NotaryInterface notary = notaryServers.get(notaryID);
+		            String cnonce = cryptoUtils.generateCNonce();
+		            String data = notary.getNonce(this.id) + cnonce + this.id + goodId;
+		            		
+		            result = notary
+		                    .stateOfGood(this.getId(), cnonce, goodId, cryptoUtils.signMessage(data));
+		        
+			        if (cryptoUtils
+			                .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature())) {
+			        	System.out.println("ok");
+			        	Boolean toInsert = true;
+			            for(Map.Entry<Result, Integer> entry : acksList.entrySet()){
+			               if(entry.getKey().equals(result)) {
+			            	   acksList.replace(entry.getKey(), (entry.getValue() + 1));
+			            	   toInsert	= false;
+			               }
+			            }
+			            if (toInsert)
+			            	acksList.put(result, 1);
+			            
+			            System.out.println("Owner: " + result.getUserId());
+			            System.out.println("For sale: " + (Boolean) result.getContent());
+			            System.out.println("-------------------------");
+			            
+			        } else {
+			            System.err.println("ERROR: Signature does not verify");
+			            System.out.println("-------------------------");
+			            
+			        }
+                    awaitSignal.countDown();
+                    return;
+            	} catch (RemoteException e) {
+			        rebind();
+			        return;
+            	}
+            });
+        }
+		    
+        
         try {
+            awaitSignal.await(TIMEOUT, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            return null;
+        }
+        
+        Map.Entry<Result, Integer> maxEntry = null;
+        for(Map.Entry<Result, Integer> entry : acksList.entrySet()){
+           if(maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0)
+              maxEntry = entry;
+        }
+        
+        System.out.println("MAP -> " + acksList);
 
-            String data = null;
-            Result result = null;
-            String lastNotary = null;
-            for (String notaryID : notaryServers.keySet()) {
-                NotaryInterface notary = notaryServers.get(notaryID);
-                String cnonce = cryptoUtils.generateCNonce();
-                data = notary.getNonce(this.id) + cnonce + this.id + goodId;
-
-                result = notary
-                        .stateOfGood(this.getId(), cnonce, goodId, cryptoUtils.signMessage(data));
-                lastNotary = notaryID;
-            }
-            if (cryptoUtils
-                    .verifySignature(lastNotary, data + result.getContent().hashCode(), result.getSignature())) {
-                System.out.println("Owner: " + result.getUserId());
-                System.out.println("For sale: " + (Boolean) result.getContent());
-                System.out.println("-------------------------");
-                return result;
-            } else {
-                System.err.println("ERROR: Signature does not verify");
-                System.out.println("-------------------------");
-                return null;
-            }
-        } catch (RemoteException e) {
-            rebind();
-            return stateOfGood(goodId);
+        if (maxEntry.getValue() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+        	System.out.println("QUORUM REACHED!!!!");
+        	return maxEntry.getKey();
+        }
+        else {
+        	System.out.println("Quorum not reached...");
+        	return null;
         }
     }
 

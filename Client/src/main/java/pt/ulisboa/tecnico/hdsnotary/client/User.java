@@ -48,20 +48,19 @@ public class User extends UnicastRemoteObject implements UserInterface {
     // List of all goods possessed
     private Map<String, Good> goods;
 
-    // List of timestamps per good
-    private Map<String, Integer> writeTimeStamps;
-
     // Instance of remote Notary Object
     private TreeMap<String, NotaryInterface> notaryServers;
 
     private String keysPath; // KeyStore location
     private String password; // KeyStore password
 
-    CryptoUtilities cryptoUtils;
+    private CryptoUtilities cryptoUtils;
 
     private Map<String, String> nonceList = new HashMap<>();
 
     private ExecutorService service = Executors.newFixedThreadPool(4);
+
+    private int readID = 0;
 
     public User(String id, TreeMap<String, NotaryInterface> notaryServers,
                 String user2, String user3,
@@ -390,6 +389,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
         List<Result> acksList = Collections.synchronizedList(new ArrayList<>());
 
     	CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
+        readID++;
 
         for (String notaryID : notaryServers.keySet()) {
             NotaryInterface notary = notaryServers.get(notaryID);
@@ -399,10 +399,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		            String data = notary.getNonce(this.id) + cnonce + this.id + goodId;
 
 		            Result result = notary
-		                    .stateOfGood(this.getId(), cnonce, goodId, cryptoUtils.signMessage(data));
+		                    .stateOfGood(this.getId(), readID, cnonce, goodId, cryptoUtils.signMessage(data));
 		        
 			        if (cryptoUtils
-			                .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature())) {
+			                .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature()) && result.getReadID() == readID) {
 
                         acksList.add(result);
 			            

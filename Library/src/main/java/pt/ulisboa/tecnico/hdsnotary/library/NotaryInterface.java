@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.security.cert.X509Certificate;
-import java.util.TreeMap;
 
 public interface NotaryInterface extends Remote {
 
@@ -13,7 +12,7 @@ public interface NotaryInterface extends Remote {
 	Result intentionToSell(String userId, String goodId, int writeTimeStamp, String cnonce, byte[] signature)
 		throws RemoteException;
 
-	Result stateOfGood(String userId, String cnonce, String goodId, byte[] signature)
+	Result stateOfGood(String userId, int readID, String cnonce, String goodId, byte[] signature)
 		throws RemoteException;
 
 	Transfer transferGood(String sellerId, String buyerId, String goodId, String cnonce,

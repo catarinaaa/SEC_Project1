@@ -2,24 +2,31 @@ package pt.ulisboa.tecnico.hdsnotary.client;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.rmi.ConnectException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
-import java.rmi.registry.LocateRegistry;
-import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
-
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.*;
-
-import pt.ulisboa.tecnico.hdsnotary.library.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
+import pt.ulisboa.tecnico.hdsnotary.library.Good;
+import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
+import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
+import pt.ulisboa.tecnico.hdsnotary.library.Result;
+import pt.ulisboa.tecnico.hdsnotary.library.Transfer;
+import pt.ulisboa.tecnico.hdsnotary.library.TransferException;
+import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
 
 public class User extends UnicastRemoteObject implements UserInterface {
 
@@ -41,20 +48,19 @@ public class User extends UnicastRemoteObject implements UserInterface {
     // List of all goods possessed
     private Map<String, Good> goods;
 
-    // List of timestamps per good
-    private Map<String, Integer> writeTimeStamps;
-
     // Instance of remote Notary Object
     private TreeMap<String, NotaryInterface> notaryServers;
 
     private String keysPath; // KeyStore location
     private String password; // KeyStore password
 
-    CryptoUtilities cryptoUtils;
+    private CryptoUtilities cryptoUtils;
 
     private Map<String, String> nonceList = new HashMap<>();
 
     private ExecutorService service = Executors.newFixedThreadPool(4);
+
+    private int readID = 0;
 
     public User(String id, TreeMap<String, NotaryInterface> notaryServers,
                 String user2, String user3,
@@ -279,7 +285,11 @@ public class User extends UnicastRemoteObject implements UserInterface {
      */
     public boolean buying(String goodId) {
         try {
-            Result stateOfGood = stateOfGood(goodId);
+        	if(goods.containsKey(goodId)) {
+            	System.out.println("Cannot buy good owned by you!");
+            	return false;
+			}
+			Result stateOfGood = stateOfGood(goodId);
             if (stateOfGood == null || false == (Boolean)stateOfGood.getContent()) {
                 System.out.println("ERROR: Buying was not possible!");
                 System.out.println("------------------");
@@ -413,43 +423,37 @@ public class User extends UnicastRemoteObject implements UserInterface {
      * Invoked to get current state of a good, it returns the current owner and if it is for sale or not
      */
     public synchronized Result stateOfGood(String goodId) {
-    	ConcurrentHashMap<Result, Integer> acksList = new ConcurrentHashMap<Result, Integer>();
 
-        CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
+        List<Result> acksList = Collections.synchronizedList(new ArrayList<>());
+
+    	CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
+        readID++;
+
         for (String notaryID : notaryServers.keySet()) {
-            service.execute(() -> {
+            NotaryInterface notary = notaryServers.get(notaryID);
+        	service.execute(() -> {
             	try {
-                    Result result;
-	            	NotaryInterface notary = notaryServers.get(notaryID);
 		            String cnonce = cryptoUtils.generateCNonce();
 		            String data = notary.getNonce(this.id) + cnonce + this.id + goodId;
-		            		
-		            result = notary
-		                    .stateOfGood(this.getId(), cnonce, goodId, cryptoUtils.signMessage(data));
+
+		            Result result = notary
+		                    .stateOfGood(this.getId(), readID, cnonce, goodId, cryptoUtils.signMessage(data));
 		        
 			        if (cryptoUtils
-			                .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature())) {
-			        	System.out.println("ok");
-			        	Boolean toInsert = true;
-			            for(Map.Entry<Result, Integer> entry : acksList.entrySet()){
-			               if(entry.getKey().equals(result)) {
-			            	   acksList.replace(entry.getKey(), (entry.getValue() + 1));
-			            	   toInsert	= false;
-			               }
-			            }
-			            if (toInsert)
-			            	acksList.put(result, 1);
+			                .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature()) && result.getReadID() == readID) {
+
+                        acksList.add(result);
 			            
 			            System.out.println("Owner: " + result.getUserId());
 			            System.out.println("For sale: " + (Boolean) result.getContent());
 			            System.out.println("-------------------------");
-			            
+
+			            awaitSignal.countDown();
 			        } else {
 			            System.err.println("ERROR: Signature does not verify");
 			            System.out.println("-------------------------");
 			            
 			        }
-                    awaitSignal.countDown();
                     return;
             	} catch (RemoteException e) {
 			        rebind();
@@ -465,18 +469,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
             e.printStackTrace();
             return null;
         }
-        
-        Map.Entry<Result, Integer> maxEntry = null;
-        for(Map.Entry<Result, Integer> entry : acksList.entrySet()){
-           if(maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0)
-              maxEntry = entry;
-        }
-        
-        System.out.println("MAP -> " + acksList);
 
-        if (maxEntry.getValue() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
-        	System.out.println("QUORUM REACHED!!!!");
-        	return maxEntry.getKey();
+        if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+            System.out.println("QUORUM REACHED!!!!");
+        	return findMaxResult(acksList);
         }
         else {
         	System.out.println("Quorum not reached...");
@@ -516,9 +512,19 @@ public class User extends UnicastRemoteObject implements UserInterface {
         try {
             remoteUser2 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser2());
             remoteUser3 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser3());
-        } catch (MalformedURLException | RemoteException | NotBoundException e) {
+        } catch (Exception e) {
             System.err.println("ERROR looking up user");
         }
+    }
+
+    private Result findMaxResult(List<Result> resultsList) {
+        int max = 0;
+        for(int i = 0; i < resultsList.size(); i++) {
+            if(resultsList.get(i).getWriteTimestamp() > resultsList.get(max).getWriteTimestamp()) {
+                max = i;
+            }
+        }
+        return resultsList.get(max);
     }
 
 }

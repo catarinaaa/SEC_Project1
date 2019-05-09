@@ -140,7 +140,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
             System.exit(1);
         }
     }
-
+  public String getId() {
+		return id;
+	}
 
     /*
      * Generate random number only used once, for prevention of Replay Attacks and

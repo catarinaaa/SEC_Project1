@@ -8,6 +8,7 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
 import java.security.cert.X509Certificate;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,13 +38,13 @@ public class User extends UnicastRemoteObject implements UserInterface {
     private final String user2;
     private final String user3;
     private final Boolean verifyCC;
-    private UserInterface remoteUser2 = null;
-    private UserInterface remoteUser3 = null;
+    
     // List of all goods possessed
     private Map<String, Good> goods;
 
     // Instance of remote Notary Object
     private TreeMap<String, NotaryInterface> notaryServers;
+    private TreeMap<String, UserInterface> remoteUsers = new TreeMap<String,UserInterface>();
 
     private String keysPath; // KeyStore location
     private String password; // KeyStore password
@@ -83,21 +84,17 @@ public class User extends UnicastRemoteObject implements UserInterface {
     }
 
     private void connectToUsers() {
-        lookUpUsers();
 
-        try {
-            if (remoteUser2 != null) {
-                cryptoUtils.addCertToList(getUser2(), remoteUser2.getCertificate());
-                remoteUser2.connectUser(this.id, getCertificate());
-            }
-            if (remoteUser3 != null) {
-                cryptoUtils.addCertToList(getUser3(), remoteUser3.getCertificate());
-                remoteUser3.connectUser(getUser3(), remoteUser3.getCertificate());
-            }
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        }
-    }
+		lookUpUsers();
+		try {
+			for(Map.Entry<String, UserInterface> e : remoteUsers.entrySet()) {
+				cryptoUtils.addCertToList(e.getKey(), e.getValue().getCertificate());
+				e.getValue().connectUser(this.id, getCertificate());
+			}
+		} catch (RemoteException e) {
+			e.printStackTrace();
+		}
+	}
 
     /*
      * Function to obtain goods owned by the user
@@ -112,8 +109,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
             X509Certificate res = notary
                     .connectToNotary(this.id, cnonce, cryptoUtils.getStoredCert(), cryptoUtils.signMessage(toSign));
 
-            cryptoUtils.addCertToList(notaryID, res);
-            System.out.println("Response");
+			cryptoUtils.addCertToList(notaryID, res);
         }
     }
 
@@ -130,13 +126,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
                 res = notary.getGoodsFromUser(this.id, cnonce, cryptoUtils.signMessage(toSign));
             } catch (InvalidSignatureException e) {
                 e.getMessage();
-            } finally {
-                System.out.println("Response");
-            }
+            } 
 
             //verify received message
             String toVerify = toSign + res.getContent().hashCode();
-            System.out.println("To Verify: " + toVerify);
             if (!cryptoUtils.verifySignature(notaryID, toVerify, res.getSignature())) {
                 System.err.println("ERROR: Signature could not be verified");
             }
@@ -291,35 +284,20 @@ public class User extends UnicastRemoteObject implements UserInterface {
                 return false;
             } else {
                 String seller = stateOfGood.getUserId();
-
-                if (remoteUser2 == null || remoteUser3 == null) {
-                    lookUpUsers();
-                }
-
+                
+                //reconnect to users if one is missing
+                if(!remoteUsers.containsKey(seller))
+                	connectToUsers();
+                
                 Transfer result;
-
-                if (seller.equals(user2) && remoteUser2 != null) {
-                    if (!cryptoUtils.containsCert(user2)) // TODO
-                        cryptoUtils.addCertToList(user2, remoteUser2.getCertificate());
-                    String nonce = remoteUser2.getNonce(this.id, cryptoUtils.signMessage(this.id));
-                    String cnonce = cryptoUtils.generateCNonce();
-                    nonceList.put(user2, cnonce);
-                    String toSign = nonce + cnonce + this.id + goodId;
-                    result = remoteUser2
-                            .buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
-                    goods.put(goodId, result.getGood());
-                } else if (seller.equals(user3) && remoteUser3 != null) {
-                    if (!cryptoUtils.containsCert(user3)) // TODO
-                        cryptoUtils.addCertToList(user3, remoteUser3.getCertificate());
-                    String nonce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
-                    String cnonce = cryptoUtils.generateCNonce();
-                    nonceList.put(user3, cnonce);
-                    String toSign = nonce + cnonce + this.id + goodId;
-                    result = remoteUser3
-                            .buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
-                    goods.put(goodId, result.getGood());
-                }
-
+                String nonce = remoteUsers.get(seller).getNonce(this.id, cryptoUtils.signMessage(this.id));
+                String cnonce = cryptoUtils.generateCNonce();
+                nonceList.put(seller, cnonce);
+                String toSign = nonce + cnonce + this.id + goodId;
+                result = remoteUsers.get(seller)
+                        .buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
+                goods.put(goodId, result.getGood());
+                
                 System.out.println("SUCCESSFUL BUY");
                 System.out.println(goodId + " was added to the list of goods!");
                 System.out.println("------------------");
@@ -483,13 +461,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
      * Invoked when the server crashes and communications between the user and the notary fail
      */
     private void rebind() {
-        try {
             notaryServers = Client.locateNotaries();
             lookUpUsers();
-        } catch (MalformedURLException | RemoteException | NotBoundException e) {
-            e.printStackTrace();
-            System.exit(0);
-        }
+
     }
 
 
@@ -507,12 +481,13 @@ public class User extends UnicastRemoteObject implements UserInterface {
      * Finds the remaining users on the RMI registry
      */
     private void lookUpUsers() {
-        System.out.println(getUser2());
-        System.out.println(getUser3());
         try {
-            remoteUser2 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser2());
-            remoteUser3 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser3());
-        } catch (Exception e) {
+            String[] regList = Naming.list("//localhost:3000");
+            for(String s : regList) {
+            	if(!s.contains("Notary") && !s.contains(this.id))
+            		remoteUsers.put(s.replace("//localhost:3000/", ""), (UserInterface) Naming.lookup(s));
+            }
+        } catch (MalformedURLException | RemoteException | NotBoundException e) {
             System.err.println("ERROR looking up user");
         }
     }

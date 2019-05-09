@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsnotary.server;
 
+import java.rmi.Naming;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 
@@ -38,6 +39,7 @@ public class NotaryServer {
 			System.out.println("Press enter to shutdown");
 			System.in.read();
 			obj.stop();
+			Naming.unbind("//localhost:3000/" + obj.getId());
 			System.out.println("Server terminated");
 			System.exit(0);
 

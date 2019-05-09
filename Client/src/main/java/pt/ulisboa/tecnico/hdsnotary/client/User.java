@@ -198,8 +198,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
         Good goodToSell = goods.get(goodId);
 
         final int writeTimeStamp = goodToSell.getWriteTimestamp() + 1;
+		// TODO assinar valor
+        byte[] writeSignature = cryptoUtils.signMessage(this.id + writeTimeStamp + userId + "false");
 
-        System.out.println("WriteTimeStamp: " + writeTimeStamp);
+		System.out.println("WriteTimeStamp: " + writeTimeStamp);
 
         ConcurrentHashMap<String, Transfer> acksList = new ConcurrentHashMap<>();
 
@@ -220,7 +222,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
                     String nonceToNotary = cryptoUtils.generateCNonce();
                     String data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
 
-                    result = notary.transferGood(this.getId(), userId, goodId, writeTimeStamp, nonceToNotary,
+                    result = notary.transferGood(this.getId(), userId, goodId, writeTimeStamp, nonceToNotary, writeSignature,
                             cryptoUtils.signMessage(data));
 
                     String transferVerify =
@@ -349,7 +351,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
         final int writeTimeStamp = goodToSell.getWriteTimestamp() + 1;
 
         // TODO assinar o novo valor - true
-        byte[] writeSignature = cryptoUtils.signMessage(this.id + writeTimeStamp);
+        byte[] writeSignature = cryptoUtils.signMessage(this.id + writeTimeStamp + this.id + "true");
 
         System.out.println("WriteTimeStamp: " + writeTimeStamp);
 
@@ -436,13 +438,13 @@ public class User extends UnicastRemoteObject implements UserInterface {
                     if (cryptoUtils
                             .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature()) && result.getReadID() == readID) {
 
-                        String toVerify = result.getWriterId() + result.getWriteTimestamp();
+                        String toVerify = result.getWriterId() + result.getWriteTimestamp() + result.getUserId() + result.getContent();
 
                         if (result.getWriteTimestamp() == 0 || cryptoUtils.verifySignature(result.getWriterId(), toVerify, result.getWriteSignature())) {
                             acksList.add(result);
 
                             System.out.println("Owner: " + result.getUserId());
-                            System.out.println("For sale: " + (Boolean) result.getContent());
+                            System.out.println("For sale: " + result.getContent());
                             System.out.println("-------------------------");
                         }
                     } else {

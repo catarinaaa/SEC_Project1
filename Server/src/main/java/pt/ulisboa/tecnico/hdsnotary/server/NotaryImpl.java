@@ -239,8 +239,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
      * every parameter is correct
      */
     @Override
-    public Transfer transferGood(String sellerId, String buyerId, String goodId, int writeTimestamp, String cnonce,
-                                 byte[] signature) throws IOException, TransferException {
+    public Transfer transferGood(String sellerId, String buyerId, String goodId, int writeTimestamp,
+		String cnonce,
+		byte[] writeSignature, byte[] signature) throws IOException, TransferException {
 
         if (sellerId == null || buyerId == null || goodId == null || cnonce == null
                 || signature == null) {
@@ -264,6 +265,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
             good.setUserId(buyerId);
             good.notForSale();
             good.setWriteTimestamp(writeTimestamp);
+            good.setSignature(writeSignature);
+            good.setWriterId(sellerId);
             goodsList.put(goodId, good);
             saveTransfer(sellerId, buyerId, goodId);
             removeSelling(goodId);
@@ -389,16 +392,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
         }
         System.out.println("-------------------------\n");
     }
-
-//	private void printSellingList() {
-//		for(Map.Entry<String,Good> entry : goodsList.entrySet()) {
-//			  String goodId = entry.getKey();
-//			  Good good = entry.getValue();
-//			  
-//			  if (good.forSale())
-//				  System.out.println("Good " + goodId + " is selling");
-//		}
-//	}
 
     public void stop() {
         try {

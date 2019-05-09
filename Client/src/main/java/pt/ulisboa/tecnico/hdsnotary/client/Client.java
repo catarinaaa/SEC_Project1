@@ -116,6 +116,7 @@ public class Client {
 						break;
 					case 5:
 						System.out.println("Goodbye!");
+						Naming.unbind("//localhost:3000/" + user.getId());
 						exit = true;
 						break;
 					default:
@@ -123,7 +124,7 @@ public class Client {
 				}
 			}
 
-		} catch (IOException e) {
+		} catch (NotBoundException | IOException e) {
 			e.printStackTrace();
 			System.err.println("ERROR locating Notary servers");
 		} catch (KeyStoreException e) {
@@ -132,8 +133,7 @@ public class Client {
 			e.printStackTrace();
 		} catch (InterruptedException e) {
 			e.printStackTrace();
-		}
-		finally {
+		} finally {
 			System.err.println("Exiting!");
 			scanner.close();
 			System.exit(0);

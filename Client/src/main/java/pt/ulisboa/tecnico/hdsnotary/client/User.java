@@ -10,10 +10,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
-
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -36,8 +33,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
     private final String user2;
     private final String user3;
     private final Boolean verifyCC;
-    private UserInterface remoteUser2 = null;
-    private UserInterface remoteUser3 = null;
+    
     // List of all goods possessed
     private Map<String, Good> goods;
 
@@ -110,7 +106,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 					.connectToNotary(this.id, cnonce, cryptoUtils.getStoredCert(), cryptoUtils.signMessage(toSign));
 
 			cryptoUtils.addCertToList(notaryID, res);
-            System.out.println("Response");
         }
     }
 

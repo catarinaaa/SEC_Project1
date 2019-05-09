@@ -32,18 +32,12 @@ public class Client {
 		Registry reg = null;
 
 		try {
-
-			reg = LocateRegistry.getRegistry(PORT);
-
-			for (String s : reg.list()) {
-				System.out.println("Name > " + s);
+			TreeMap<String, NotaryInterface> notaries = null;
+			while( (notaries = locateNotaries()) == null) {
+				System.out.println("Trying to reconnect in 3 seconds...");
+				Thread.sleep(3000);
 			}
-
-//			NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
-
-			TreeMap<String, NotaryInterface> notaries = locateNotaries();
-//			notaries.put("Notary", notary);
-
+			
 			while (true) {
 				if (args.length == 0) {
 					System.out.println("Choose one user to create:");
@@ -59,33 +53,29 @@ public class Client {
 					case 1:
 						user = new User("Alice", notaries, "Bob", "Charlie", false);
 						name = "Alice";
-						//user.addGood("good1", false);
-						//user.addGood("good2", false);
 						break;
 					case 2:
 						user = new User("Bob", notaries, "Alice", "Charlie", false);
 						name = "Bob";
-//                        user.addGood("good3", false);
-//                        user.addGood("good4", false);
 						break;
 					case 3:
 						user = new User("Charlie", notaries, "Alice", "Bob", false);
 						name = "Charlie";
-//                        user.addGood("good5", false);
-//                        user.addGood("good6", false);
 						break;
 					default:
 						System.out.println("Invalid option!");
 				}
-
-				if (user != null) {
-					reg = LocateRegistry.getRegistry(PORT);
-					reg.rebind(name, user);
-					break;
-				}
-
+				if(user != null) break;
 			}
-
+			if ((reg = bindUser(PORT, name, user)) != null) {
+				System.out.println("Trying to reconnect in 3 seconds...");
+				Thread.sleep(3000);
+			}
+			
+			for (String s : reg.list()) {
+				System.out.println("Name > " + s);
+			}
+			
 			Boolean exit = false;
 
 			while (!exit) {
@@ -133,12 +123,14 @@ public class Client {
 				}
 			}
 
-		} catch (NotBoundException | IOException e) {
+		} catch (IOException e) {
 			e.printStackTrace();
 			System.err.println("ERROR locating Notary servers");
 		} catch (KeyStoreException e) {
 			System.err.println("ERROR creating user, cryptoUtils error");
 		} catch (InvalidSignatureException e) {
+			e.printStackTrace();
+		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
 		finally {
@@ -148,13 +140,27 @@ public class Client {
 		}
 	}
 
-	public static TreeMap<String, NotaryInterface> locateNotaries()
-		throws NotBoundException, MalformedURLException, RemoteException {
-		TreeMap<String, NotaryInterface> list = new TreeMap<>();
-		list.put("Notary1", (NotaryInterface) Naming.lookup("//localhost:3000/Notary1"));
-		list.put("Notary2", (NotaryInterface) Naming.lookup("//localhost:3000/Notary2"));
-		list.put("Notary3", (NotaryInterface) Naming.lookup("//localhost:3000/Notary3"));
-		list.put("Notary4", (NotaryInterface) Naming.lookup("//localhost:3000/Notary4"));
-		return list;
+	public static TreeMap<String, NotaryInterface> locateNotaries() {
+		try {
+			TreeMap<String, NotaryInterface> list = new TreeMap<>();
+			list.put("Notary1", (NotaryInterface) Naming.lookup("//localhost:3000/Notary1"));
+			list.put("Notary2", (NotaryInterface) Naming.lookup("//localhost:3000/Notary2"));
+			list.put("Notary3", (NotaryInterface) Naming.lookup("//localhost:3000/Notary3"));
+			list.put("Notary4", (NotaryInterface) Naming.lookup("//localhost:3000/Notary4"));
+			return list;
+		} catch(NotBoundException | MalformedURLException |RemoteException e) {
+			return null;
+		} 
+	}
+	
+	public static Registry bindUser(int port, String name, User user) {
+		try {
+			Registry reg = LocateRegistry.getRegistry();
+			reg = LocateRegistry.getRegistry(port);
+			reg.rebind(name, user);
+			return reg;
+		} catch (RemoteException e) {
+			return null;
+		}
 	}
 }

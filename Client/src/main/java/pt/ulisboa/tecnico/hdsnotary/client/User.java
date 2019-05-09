@@ -241,7 +241,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			        		awaitSignal.countDown();
 			        	}
 				         
-			            System.out.println("CC Signature verified! Notary confirmed buy good");
+			            //System.out.println("CC Signature verified! Notary confirmed buy good");
 			            return;
 			        } else {
 			            System.err.println("ERROR: CC Signature does not verify");
@@ -267,7 +267,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
         }
            
         if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
-        	System.out.println("QUORUM REACHED!!!!");
+        	System.out.println("QUORUM REACHED!!!! OMG I'M SELLING A GOOD!");
+        	System.out.println("LOOK AT ME I AM RICH NOW!");
         	System.out.println("Removing good from my list");
         	goods.remove(goodId);
         	return (Transfer) acksList.values().toArray()[0];

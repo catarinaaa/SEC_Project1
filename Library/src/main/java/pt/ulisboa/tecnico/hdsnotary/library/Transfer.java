@@ -36,4 +36,13 @@ public class Transfer implements Serializable {
 	public int getId() {
 		return this.id;
 	}
+	
+	@Override
+	public boolean equals(Object o) {
+		Transfer r = (Transfer) o;
+
+		if(buyerId == null || sellerId == null || r.getBuyerId() == null || r.getSellerId() == null)
+			return false;
+        return (buyerId.equals(r.getBuyerId()) && sellerId.equals(r.getSellerId()));
+	}
 }

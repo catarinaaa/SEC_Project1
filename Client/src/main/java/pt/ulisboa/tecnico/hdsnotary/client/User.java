@@ -193,46 +193,84 @@ public class User extends UnicastRemoteObject implements UserInterface {
      * Invoked when another user is buying a good that this user owns
      */
     @Override
-    public Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature)
-            throws TransferException {
+    public synchronized Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
+    	//ConcurrentHashMap<Transfer, Integer> acksList = new ConcurrentHashMap<Transfer, Integer>();
+        
+    	Good goodToSell = goods.get(goodId);
 
+        final int writeTimeStamp = goodToSell.getWriteTimestamp() + 1;
+
+        System.out.println("WriteTimeStamp: " + writeTimeStamp);
+
+        ConcurrentHashMap<String, Transfer> acksList = new ConcurrentHashMap<>();
+
+    	CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
+        
+        for (String notaryID : notaryServers.keySet()) {
+        	service.execute(() -> {
+        		try {
+		        	Transfer result;
+		            NotaryInterface notary = notaryServers.get(notaryID);
+		
+		            String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
+		
+		            if (!cryptoUtils.verifySignature(userId, toVerify, signature)) {
+		                throw new TransferException("Error");
+		            }
+		
+		            String nonceToNotary = cryptoUtils.generateCNonce();
+		            String data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
+		
+		            result = notary.transferGood(this.getId(), userId, goodId, writeTimeStamp, nonceToNotary,
+		                    cryptoUtils.signMessage(data));
+		
+			        String transferVerify =
+			                result.getId() + result.getBuyerId() + result.getSellerId() + result.getGood().getGoodId();
+			
+			        if (!verifyCC || cryptoUtils
+			                .verifySignature(NOTARY_CC, transferVerify, result.getNotarySignature(),
+			                        notaryServers.get(notaryID).getCertificateCC())) {
+			        	if (result.getGood().getWriteTimestamp() == writeTimeStamp) {
+			        		acksList.put(notaryID, result);
+			        		awaitSignal.countDown();
+			        	}
+				         
+			            System.out.println("CC Signature verified! Notary confirmed buy good");
+			            return;
+			        } else {
+			            System.err.println("ERROR: CC Signature does not verify");
+			            awaitSignal.countDown();
+			            throw new TransferException("Error");
+			        }
+			    } catch (IOException e) {
+			        rebind();
+			        return;
+			    } catch (TransferException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					return;
+				}
+        	});
+        }
+        
         try {
-            Transfer result = null;
-            String lastNotary = null;
-            for (String notaryID : notaryServers.keySet()) {
-                NotaryInterface notary = notaryServers.get(notaryID);
-
-                String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
-
-                if (!cryptoUtils.verifySignature(userId, toVerify, signature)) {
-                    throw new TransferException("Error");
-                }
-
-                String nonceToNotary = cryptoUtils.generateCNonce();
-                String data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
-
-                result = notary.transferGood(this.getId(), userId, goodId, nonceToNotary,
-                        cryptoUtils.signMessage(data));
-
-                lastNotary = notaryID;
-            }
-
-            String transferVerify =
-                    result.getId() + result.getBuyerId() + result.getSellerId() + result.getGood().getGoodId();
-
-            if (!verifyCC || cryptoUtils
-                    .verifySignature(NOTARY_CC, transferVerify, result.getNotarySignature(),
-                            notaryServers.get(lastNotary).getCertificateCC())) {
-                System.out.println("CC Signature verified! Notary confirmed buy good");
-                goods.remove(goodId);
-                return result;
-            } else {
-                System.err.println("ERROR: CC Signature does not verify");
-                throw new TransferException("Error");
-            }
-        } catch (IOException e) {
-            rebind();
-            return buyGood(userId, goodId, cnonce, signature);
+            awaitSignal.await(TIMEOUT, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            return null;
+        }
+           
+        if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+        	System.out.println("QUORUM REACHED!!!!");
+        	System.out.println("Removing good from my list");
+        	goods.remove(goodId);
+        	return (Transfer) acksList.values().toArray()[0];
+        	// acksList.keySet().stream().findFirst().get();
+        	// acksList.entrySet().iterator().next().getValue();
+        }
+        else {
+        	System.out.println("Quorum not reached...");
+        	return null;
         }
     }
 
@@ -327,7 +365,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
                     if (result != null && cryptoUtils
                             .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature())) {
-                        System.out.println("Recived WriteTimeStamp: " + result.getWriteTimestamp());
+                        System.out.println("Received WriteTimeStamp: " + result.getWriteTimestamp());
                         if ((Boolean) result.getContent() && result.getWriteTimestamp() == writeTimeStamp) {
                             acksList.put(notaryID, result);
                             awaitSignal.countDown();
@@ -341,7 +379,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
                         return;
                     } else {
                         System.err.println("ERROR: Signature does not verify");
-                        System.out.println("-----------------------------");
+                        System.out.println(")-----------------------------");
                         return;
 
                     }

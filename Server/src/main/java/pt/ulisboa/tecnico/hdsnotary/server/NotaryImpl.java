@@ -239,7 +239,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 * every parameter is correct
 	 */
 	@Override
-	public Transfer transferGood(String sellerId, String buyerId, String goodId, String cnonce,
+	public Transfer transferGood(String sellerId, String buyerId, String goodId, int writeTimestamp, String cnonce,
 		byte[] signature) throws IOException, TransferException {
 
 		if (sellerId == null || buyerId == null || goodId == null || cnonce == null
@@ -260,9 +260,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		// verifies
 
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(sellerId)
-			&& good.forSale() && cryptoUtils.verifySignature(sellerId, data, signature)) {
+			&& good.forSale() && cryptoUtils.verifySignature(sellerId, data, signature) && writeTimestamp > good.getWriteTimestamp()) {
 			good.setUserId(buyerId);
 			good.notForSale();
+			good.setWriteTimestamp(writeTimestamp);
 			goodsList.put(goodId, good);
 			saveTransfer(sellerId, buyerId, goodId);
 			removeSelling(goodId);

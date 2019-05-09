@@ -140,7 +140,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
             System.exit(1);
         }
     }
-
+  public String getId() {
+		return id;
+	}
 
     /*
      * Generate random number only used once, for prevention of Replay Attacks and
@@ -389,16 +391,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
         }
         System.out.println("-------------------------\n");
     }
-
-//	private void printSellingList() {
-//		for(Map.Entry<String,Good> entry : goodsList.entrySet()) {
-//			  String goodId = entry.getKey();
-//			  Good good = entry.getValue();
-//			  
-//			  if (good.forSale())
-//				  System.out.println("Good " + goodId + " is selling");
-//		}
-//	}
 
     public void stop() {
         try {

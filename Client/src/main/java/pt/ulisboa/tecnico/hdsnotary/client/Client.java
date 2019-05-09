@@ -8,10 +8,8 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.security.KeyStoreException;
-import java.util.ArrayList;
 import java.util.Scanner;
 import java.util.TreeMap;
-
 import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
 import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
 
@@ -32,7 +30,7 @@ public class Client {
 		Registry reg = null;
 
 		try {
-			TreeMap<String, NotaryInterface> notaries = null;
+			TreeMap<String, NotaryInterface> notaries;
 			while( (notaries = locateNotaries()) == null) {
 				System.out.println("Trying to reconnect in 3 seconds...");
 				Thread.sleep(3000);
@@ -67,7 +65,7 @@ public class Client {
 				}
 				if(user != null) break;
 			}
-			if ((reg = bindUser(PORT, name, user)) != null) {
+			while ((reg = bindUser(PORT, name, user)) == null) {
 				System.out.println("Trying to reconnect in 3 seconds...");
 				Thread.sleep(3000);
 			}
@@ -155,8 +153,7 @@ public class Client {
 	
 	public static Registry bindUser(int port, String name, User user) {
 		try {
-			Registry reg = LocateRegistry.getRegistry();
-			reg = LocateRegistry.getRegistry(port);
+			Registry reg = LocateRegistry.getRegistry(port);
 			reg.rebind(name, user);
 			return reg;
 		} catch (RemoteException e) {

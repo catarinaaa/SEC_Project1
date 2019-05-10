@@ -48,6 +48,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private final String TRANSACTIONSPATH;
 	private final String SELLINGLISTPATH;
 	private final String TEMPFILE;
+	private final Boolean verbose = false;
 
 	// Singleton
 	private static NotaryImpl instance = null;
@@ -160,7 +161,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		if (userId == null) {
 			throw new NullPointerException();
 		}
-		System.out.println("Generating nonce for user " + userId);
+		if (verbose)
+			System.out.println("Generating nonce for user " + userId);
 		String nonce = cryptoUtils.generateCNonce();
 		nonceList.put(userId, nonce);
 		return nonce;
@@ -316,11 +318,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void recoverSellingList() throws IOException {
-		System.out.println("Recovering selling list");
+		if (verbose)
+			System.out.println("Recovering selling list");
 		String line;
 		while ((line = inputSellings.readLine()) != null) {
-			System.out.println("--> " + line);
-			System.out.println("GoodId: " + line);
+			if (verbose) {
+				System.out.println("--> " + line);
+				System.out.println("GoodId: " + line);
+			}
 			Good good = goodsList.get(line);
 			good.setForSale();
 		}
@@ -328,7 +333,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void recoverTransactions() throws IOException {
-		System.out.println("Recovering transactions");
+		if (verbose)
+			System.out.println("Recovering transactions");
 		String line;
 		String[] splitLine;
 		Good good;
@@ -342,9 +348,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				System.err.println("ERROR: Recovering line failed. Ignoring line...");
 				continue;
 			}
-
-			System.out.println(
-				"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
+			
+			if (verbose)
+				System.out.println(
+					"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
 			good = goodsList.get(splitLine[2]);
 			good.setUserId(splitLine[1]);
 			goodsList.put(splitLine[2], good);
@@ -559,7 +566,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 		//return result signed
 		String data = toVerify + map.hashCode();
-		System.out.println("To Verify: " + data);
 		return new Result(map, cryptoUtils.signMessage(data));
 	}
 }

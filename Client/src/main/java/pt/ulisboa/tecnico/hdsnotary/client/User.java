@@ -38,6 +38,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
     private final String user2;
     private final String user3;
     private final Boolean verifyCC;
+    private final Boolean verbose = false;
     
     // List of all goods possessed
     private Map<String, Good> goods;
@@ -135,9 +136,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
             }
             map = (TreeMap<String, Good>) res.getContent();
         }
-        System.out.println("Goods owned:");
-        for (String s : map.keySet()) {
-            System.out.println("> " + s);
+        
+        if (verbose) {
+	        System.out.println("Goods owned:");
+	        for (String s : map.keySet()) {
+	            System.out.println("> " + s);
+	        }
         }
         goods = map;
     }
@@ -193,8 +197,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
         final int writeTimeStamp = goodToSell.getWriteTimestamp() + 1;
 		// TODO assinar valor
         byte[] writeSignature = cryptoUtils.signMessage(this.id + writeTimeStamp + userId + "false");
-
-		System.out.println("WriteTimeStamp: " + writeTimeStamp);
+        
+        if (verbose)
+        	System.out.println("WriteTimeStamp: " + writeTimeStamp);
 
         ConcurrentHashMap<String, Transfer> acksList = new ConcurrentHashMap<>();
 
@@ -228,8 +233,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
                             acksList.put(notaryID, result);
                             awaitSignal.countDown();
                         }
-
-                        //System.out.println("CC Signature verified! Notary confirmed buy good");
+                        
+                        if (verbose)
+                        	System.out.println("CC Signature verified! Notary confirmed buy good");
                         return;
                     } else {
                         System.err.println("ERROR: CC Signature does not verify");
@@ -255,15 +261,15 @@ public class User extends UnicastRemoteObject implements UserInterface {
         }
 
         if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
-            System.out.println("QUORUM REACHED!!!! OMG I'M SELLING A GOOD!");
-            System.out.println("LOOK AT ME I AM RICH NOW!");
-            System.out.println("Removing good from my list");
+            System.out.println("QUORUM REACHED!!!! OMG I'M SELLING A GOOD! LOOK AT ME I AM RICH NOW!!");
+            if (verbose) 
+	            System.out.println("Removing good " + goodId + " from my list");
             goods.remove(goodId);
             return (Transfer) acksList.values().toArray()[0];
             // acksList.keySet().stream().findFirst().get();
             // acksList.entrySet().iterator().next().getValue();
         } else {
-            System.out.println("Quorum not reached...");
+            System.out.println("Quorum not reached...    :(");
             return null;
         }
     }
@@ -298,9 +304,11 @@ public class User extends UnicastRemoteObject implements UserInterface {
                         .buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
                 goods.put(goodId, result.getGood());
                 
-                System.out.println("SUCCESSFUL BUY");
-                System.out.println(goodId + " was added to the list of goods!");
-                System.out.println("------------------");
+                System.out.println("SUCCESSFUL BUY! I'M NOW THE OWNER OF A LUXURY GOOD!");
+                if (verbose) {
+	                System.out.println(goodId + " was added to the list of goods!");
+	                System.out.println("------------------");
+                }
                 return true;
 
 
@@ -330,8 +338,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
         // TODO assinar o novo valor - true
         byte[] writeSignature = cryptoUtils.signMessage(this.id + writeTimeStamp + this.id + "true");
-
-        System.out.println("WriteTimeStamp: " + writeTimeStamp);
+        
+        if (verbose)
+        	System.out.println("WriteTimeStamp: " + writeTimeStamp);
 
         ConcurrentHashMap<String, Result> acksList = new ConcurrentHashMap<>();
         ConcurrentHashMap<String, Result> failedAcksList = new ConcurrentHashMap<>();
@@ -351,21 +360,24 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
                     if (result != null && cryptoUtils
                             .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature())) {
-                        System.out.println("Received WriteTimeStamp: " + result.getWriteTimestamp());
+                    	if (verbose)
+                    		System.out.println("Received WriteTimeStamp: " + result.getWriteTimestamp());
                         if ((Boolean) result.getContent() && result.getWriteTimestamp() == writeTimeStamp) {
                             acksList.put(notaryID, result);
                             awaitSignal.countDown();
-                            System.out.println("NotaryID: " + notaryID + "\nResult: " + (Boolean) result.getContent());
+                            if (verbose)
+                            	System.out.println("NotaryID: " + notaryID + "\nResult: " + (Boolean) result.getContent());
                         } else {
                             failedAcksList.put(notaryID, result);
                             awaitSignal.countDown();
                             System.out.println("Result: Invalid good");
                         }
-                        System.out.println("-----------------------------");
+                        if (verbose)
+                        	System.out.println("-----------------------------");
 
                     } else {
                         System.err.println("ERROR: Signature does not verify");
-                        System.out.println(")-----------------------------");
+                        System.out.println("-----------------------------");
 
                     }
                 } catch (RemoteException e) {
@@ -383,12 +395,16 @@ public class User extends UnicastRemoteObject implements UserInterface {
         }
 
         if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
-            System.out.println("AcksList: " + acksList.size());
+        	if (verbose)
+        		System.out.println("AcksList: " + acksList.size());
+        	System.out.println("Quorum Reached!   :)");
             goods.get(goodId).setForSale();
             goodToSell.setWriteTimestamp(writeTimeStamp);
             return true;
         } else {
-            System.out.println("FailedAcksList: " + failedAcksList.size());
+        	System.out.println("Quorum not reached...    :'(");
+        	if (verbose)
+        		System.out.println("FailedAcksList: " + failedAcksList.size());
             return false;
         }
     }
@@ -420,10 +436,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
                         if (result.getWriteTimestamp() == 0 || cryptoUtils.verifySignature(result.getWriterId(), toVerify, result.getWriteSignature())) {
                             acksList.add(result);
-
-                            System.out.println("Owner: " + result.getUserId());
-                            System.out.println("For sale: " + result.getContent());
-                            System.out.println("-------------------------");
+                            
+                            if (verbose) {
+	                            System.out.println("Owner: " + result.getUserId());
+	                            System.out.println("For sale: " + result.getContent());
+	                            System.out.println("-------------------------");
+                            }
                         }
                     } else {
                         System.err.println("ERROR: Signature does not verify");
@@ -449,10 +467,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
         }
 
         if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
-            System.out.println("QUORUM REACHED!!!!");
+            System.out.println("QUORUM REACHED!!!!   YOU SHALL HAVE THE STATE!");
             return findMaxResult(acksList);
         } else {
-            System.out.println("Quorum not reached...");
+            System.out.println("Quorum not reached...    :'(");
             return null;
         }
     }

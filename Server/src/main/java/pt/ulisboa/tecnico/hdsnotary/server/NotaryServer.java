@@ -12,7 +12,10 @@ public class NotaryServer {
 		int port = 3000;
 		boolean useCC;
 		String id;
-
+		boolean verbose = false;
+		
+		if(args.length == 3)
+			verbose = Boolean.parseBoolean(args[2]);
 		if(args.length == 2) {
 			id = args[0];
 			useCC = Boolean.parseBoolean(args[1]);
@@ -28,15 +31,19 @@ public class NotaryServer {
 
 			reg = LocateRegistry.getRegistry(port);
 			reg.rebind(id, obj);
-
-			for (String s : reg.list()) {
-				System.out.println("> " + s);
+			
+			if (verbose) {
+				for (String s : reg.list()) {
+					System.out.println("> " + s);
+				}
+			
+				System.out.println(id + " is ready!");
+	
 			}
 			
-			System.out.println(id + " is ready!");
-
 			System.out.println("Awaiting connections");
 			System.out.println("Press enter to shutdown");
+			
 			System.in.read();
 			obj.stop();
 			Naming.unbind("//localhost:3000/" + obj.getId());

@@ -14,9 +14,10 @@ public class NotaryServer {
 		String id;
 		boolean verbose = false;
 		
-		if(args.length == 3)
-			verbose = Boolean.parseBoolean(args[2]);
-		if(args.length == 2) {
+			
+		if(args.length == 2 || args.length == 3) {
+			if (args.length == 3)
+				verbose = Boolean.parseBoolean(args[2]);
 			id = args[0];
 			useCC = Boolean.parseBoolean(args[1]);
 		}

@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -45,8 +46,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private String id;
 	private final String keysPath;
-	private final String TRANSACTIONSPATH;
-	private final String SELLINGLISTPATH;
+	private final String[] TRANSACTIONSPATH;
+	private final String[] SELLINGLISTPATH;
 	private final String TEMPFILE;
 	private final Boolean verbose = false;
 
@@ -95,8 +96,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		this.id = id;
 
 		this.keysPath = "Server/storage/" + id + ".p12";
-		this.TRANSACTIONSPATH = "Server/storage/transactions" + id + ".txt";
-		this.SELLINGLISTPATH = "Server/storage/selling" + id + ".txt";
+		this.TRANSACTIONSPATH = new String[] {"Server/storage/transactions" + id + "Backup.txt", "Server/storage/transactions" + id + ".txt"};
+		this.SELLINGLISTPATH = new String[] {"Server/storage/selling" + id + "Backup.txt", "Server/storage/selling" + id + ".txt"};
 		this.TEMPFILE = "Server/storage/temp" + id + ".txt";
 
 		cryptoUtils = new CryptoUtilities(this.id, keysPath, this.id);
@@ -128,17 +129,15 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 
 		try {
-
-			createDatabases();
-
-			// Recovering list of goods to sell
-			inputSellings = new BufferedReader(new FileReader(sellingListFile));
-			outputSellings = new BufferedWriter(new FileWriter(sellingListFile, true));
+			
+			for (String path : SELLINGLISTPATH) {
+				createSellingListFiles(path);
+			}
 			recoverSellingList();
 
-			// Recovering transactions from transactions file
-			inputTransactions = new BufferedReader(new FileReader(transactionsFile));
-			outputTransactions = new BufferedWriter(new FileWriter(transactionsFile, true));
+			for (String path : TRANSACTIONSPATH) {
+				createTransactionsFiles(path);
+			}
 			recoverTransactions();
 
 		} catch (IOException e) {
@@ -317,44 +316,88 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return pkcs11.C_Sign(p11_session, string.getBytes(Charset.forName("UTF-8")));
 	}
 
-	private void recoverSellingList() throws IOException {
+	private void recoverSellingList() throws FileNotFoundException {
 		if (verbose)
 			System.out.println("Recovering selling list");
 		String line;
-		while ((line = inputSellings.readLine()) != null) {
-			if (verbose) {
-				System.out.println("--> " + line);
-				System.out.println("GoodId: " + line);
+		inputSellings = new BufferedReader(new FileReader(sellingListFile));
+		try {
+			while ((line = inputSellings.readLine()) != null) {
+				if (verbose) {
+					System.out.println("--> " + line);
+					System.out.println("GoodId: " + line);
+				}
+				Good good = goodsList.get(line);
+				good.setForSale();
 			}
-			Good good = goodsList.get(line);
-			good.setForSale();
+		} catch (IOException e) {
+			System.out.println("Using backup file");
+			inputSellings = new BufferedReader(new FileReader(new File(SELLINGLISTPATH[0])));
+			try {
+				while ((line = inputSellings.readLine()) != null) {
+					if (verbose) {
+						System.out.println("--> " + line);
+						System.out.println("GoodId: " + line);
+					}
+					Good good = goodsList.get(line);
+					good.setForSale();
+				}
+			} catch (IOException e1) {
+				System.out.println("OMG BACKUP IS ALSO CORRUPTED! Could not recover selling list");
+			}
 		}
-
 	}
 
-	private void recoverTransactions() throws IOException {
+	private void recoverTransactions() throws FileNotFoundException {
 		if (verbose)
 			System.out.println("Recovering transactions");
 		String line;
 		String[] splitLine;
 		Good good;
+		inputTransactions = new BufferedReader(new FileReader(transactionsFile));
 
-		while ((line = inputTransactions.readLine()) != null) {
-			splitLine = line.split(";");
+		try {
+			while ((line = inputTransactions.readLine()) != null) {
+				splitLine = line.split(";");
 
-			//checks if line is well constructed
-			if (splitLine.length != 3 || splitLine[0] == null || splitLine[1] == null
-				|| splitLine[2] == null) {
-				System.err.println("ERROR: Recovering line failed. Ignoring line...");
-				continue;
+				//checks if line is well constructed
+				if (splitLine.length != 3 || splitLine[0] == null || splitLine[1] == null
+					|| splitLine[2] == null) {
+					System.err.println("ERROR: Recovering line failed. Ignoring line...");
+					continue;
+				}
+				
+				if (verbose)
+					System.out.println(
+						"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
+				good = goodsList.get(splitLine[2]);
+				good.setUserId(splitLine[1]);
+				goodsList.put(splitLine[2], good);
 			}
-			
-			if (verbose)
-				System.out.println(
-					"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
-			good = goodsList.get(splitLine[2]);
-			good.setUserId(splitLine[1]);
-			goodsList.put(splitLine[2], good);
+		} catch (IOException e) {
+			System.out.println("Using backup file");
+			inputTransactions = new BufferedReader(new FileReader(new File(TRANSACTIONSPATH[0])));
+			try {
+				while ((line = inputTransactions.readLine()) != null) {
+					splitLine = line.split(";");
+
+					//checks if line is well constructed
+					if (splitLine.length != 3 || splitLine[0] == null || splitLine[1] == null
+						|| splitLine[2] == null) {
+						System.err.println("ERROR: Recovering line failed. Ignoring line...");
+						continue;
+					}
+					
+					if (verbose)
+						System.out.println(
+							"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
+					good = goodsList.get(splitLine[2]);
+					good.setUserId(splitLine[1]);
+					goodsList.put(splitLine[2], good);
+				}
+			} catch (IOException e1) {
+				System.out.println("OMG BACKUP IS ALSO CORRUPTED! Could not recover TRANSACTIONS list");
+			}
 		}
 
 
@@ -362,8 +405,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private void saveTransfer(String sellerId, String buyerId, String goodId) {
 		try {
-			outputTransactions.write(sellerId + ";" + buyerId + ";" + goodId + "\n");
-			outputTransactions.flush();
+			for (String path : TRANSACTIONSPATH) {
+				outputTransactions = new BufferedWriter(new FileWriter(new File(path), true));
+				outputTransactions.write(sellerId + ";" + buyerId + ";" + goodId + "\n");
+				outputTransactions.flush();
+			}
 		} catch (IOException e) {
 			System.err.println("ERROR: writing to TRANSACTIONS file failed");
 		}
@@ -371,8 +417,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private void sellingListUpdate(String goodId) {
 		try {
-			outputSellings.write(goodId + "\n");
-			outputSellings.flush();
+			for (String path : SELLINGLISTPATH) {
+				outputSellings = new BufferedWriter(new FileWriter(new File(path), true));
+				outputSellings.write(goodId + "\n");
+				outputSellings.flush();
+			}
 		} catch (IOException e) {
 			System.err.println("ERROR: writing to SELLINGS file");
 		}
@@ -388,20 +437,23 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void removeSelling(String goodId) throws IOException {
-		//Remover given goodId from selling list
-		File tempFile = new File(TEMPFILE);
-		String currentLine;
-		BufferedWriter tempWriter = new BufferedWriter(new FileWriter(tempFile));
-		while ((currentLine = inputSellings.readLine()) != null) {
-			// trim newline when comparing with lineToRemove
-			String trimmedLine = currentLine.trim();
-			if (trimmedLine.equals(goodId)) {
-				continue;
+		//Remove given goodId from selling list
+		for (String path : SELLINGLISTPATH) {
+			File tempFile = new File(TEMPFILE);
+			String currentLine;
+			BufferedWriter tempWriter = new BufferedWriter(new FileWriter(tempFile));
+			inputSellings = new BufferedReader(new FileReader(new File(path)));
+			while ((currentLine = inputSellings.readLine()) != null) {
+				// trim newline when comparing with lineToRemove
+				String trimmedLine = currentLine.trim();
+				if (trimmedLine.equals(goodId)) {
+					continue;
+				}
+				tempWriter.write(currentLine + ("\n"));
 			}
-			tempWriter.write(currentLine + ("\n"));
+			tempWriter.close();
+			tempFile.renameTo(new File(path));
 		}
-		tempWriter.close();
-		tempFile.renameTo(sellingListFile);
 	}
 
 	private void printGoods() {
@@ -430,18 +482,22 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	}
 
-	private void createDatabases() throws IOException {
+	private void createTransactionsFiles(String path) throws IOException {
 		// creates file with all transactions and file with selling list
-		transactionsFile = new File(TRANSACTIONSPATH);
+		transactionsFile = new File(path);
 		if (!transactionsFile.exists()) {
 			transactionsFile.createNewFile();
-			System.out.println("Creating new TRANSACTIONS file");
+			if (verbose)
+				System.out.println("Creating new TRANSACTIONS file");
 		}
-
-		sellingListFile = new File(SELLINGLISTPATH);
+	}
+	
+	private void createSellingListFiles(String path) throws IOException {
+		sellingListFile = new File(path);
 		if (!sellingListFile.exists()) {
 			sellingListFile.createNewFile();
-			System.out.println("Creating new SELLING LIST file");
+			if (verbose)
+				System.out.println("Creating new SELLING LIST file");
 		}
 	}
 

@@ -74,7 +74,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
         cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password);
 
-        System.out.println("Initializing user " + id);
+        //System.out.println("Initializing user " + id);
 
         connectToNotary();
 
@@ -467,8 +467,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
         }
 
         if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
-            System.out.println("QUORUM REACHED!!!!   YOU SHALL HAVE THE STATE!");
-            return findMaxResult(acksList);
+            Result result = findMaxResult(acksList);
+            System.out.println("QUORUM REACHED YOU SHALL HAVE THE STATE! IT IS ....*<INSERT DRUM ROLL SOUND>*.... " + result.getContent());
+            return result;
         } else {
             System.out.println("Quorum not reached...    :'(");
             return null;

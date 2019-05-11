@@ -11,10 +11,7 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.MalformedURLException;
 import java.nio.charset.Charset;
-import java.rmi.Naming;
-import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
@@ -26,7 +23,15 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.TreeMap;
 import pt.gov.cartaodecidadao.PteidException;
-import pt.ulisboa.tecnico.hdsnotary.library.*;
+import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
+import pt.ulisboa.tecnico.hdsnotary.library.Good;
+import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
+import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
+import pt.ulisboa.tecnico.hdsnotary.library.Result;
+import pt.ulisboa.tecnico.hdsnotary.library.StateOfGoodException;
+import pt.ulisboa.tecnico.hdsnotary.library.Transfer;
+import pt.ulisboa.tecnico.hdsnotary.library.TransferException;
+import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
 import pteidlib.PTEID_Certif;
 import pteidlib.pteid;
 import sun.security.pkcs11.wrapper.CK_ATTRIBUTE;
@@ -36,8 +41,6 @@ import sun.security.pkcs11.wrapper.CK_SESSION_INFO;
 import sun.security.pkcs11.wrapper.PKCS11;
 import sun.security.pkcs11.wrapper.PKCS11Constants;
 import sun.security.pkcs11.wrapper.PKCS11Exception;
-
-import javax.naming.spi.NamingManager;
 
 public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, Serializable {
 
@@ -202,6 +205,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			Result result = new Result(new Boolean(true), good.getWriteTimestamp(),
 					cryptoUtils.signMessage(data + new Boolean(true).hashCode()));
 
+			// TODO test, not sure if it is working
 			Map<String, Integer> listening = good.getListening();
 			for(String listener : listening.keySet()) {
 				System.out.println("###################################");

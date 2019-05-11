@@ -8,7 +8,6 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
 import java.security.cert.X509Certificate;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,9 +18,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
-import pt.ulisboa.tecnico.hdsnotary.library.*;
+import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
+import pt.ulisboa.tecnico.hdsnotary.library.Good;
+import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
+import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
+import pt.ulisboa.tecnico.hdsnotary.library.Result;
+import pt.ulisboa.tecnico.hdsnotary.library.StateOfGoodException;
+import pt.ulisboa.tecnico.hdsnotary.library.Transfer;
+import pt.ulisboa.tecnico.hdsnotary.library.TransferException;
+import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
 
 public class User extends UnicastRemoteObject implements UserInterface {
 
@@ -475,13 +480,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
         Result result = null;
         System.out.println("Size: " + answers.keySet().size());
         for (Result resultAux : answers.keySet()) {
-            System.out.println("NumberOfTImes: " + answers.get(resultAux));
             if (answers.get(resultAux) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
                 result = resultAux;
             }
         }
-
-        System.out.println("OK5");
 
         if (result == null) {
             System.err.println("ERROR ERROR ERROR ERROR");
@@ -512,23 +514,25 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
     @Override
     public void updateValue(String notaryId, Result result, String nonce, byte[] signature) throws RemoteException {
-        String toVerify = nonceList.get(notaryId) + nonce + notaryId + result.hashCode();
 
-        if (cryptoUtils.verifySignature(notaryId, toVerify, signature)) {
-            System.out.println("Updating value");
-            if (answers.containsKey(result)) {
-                answers.replace(result, answers.get(result) + 1);
-            } else {
-                answers.put(result, 1);
-            }
-
-            for (Result resultAux : answers.keySet()) {
-                if (answers.get(resultAux) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
-                    awaitSignal.countDown();
-                    System.out.println("Unblocking thread");
-                }
-            }
-        }
+        System.out.println("Hello world!\nThis is a test");
+        //        String toVerify = nonceList.get(notaryId) + nonce + notaryId + result.hashCode();
+//
+//        if (cryptoUtils.verifySignature(notaryId, toVerify, signature)) {
+//            System.out.println("Updating value");
+//            if (answers.containsKey(result)) {
+//                answers.replace(result, answers.get(result) + 1);
+//            } else {
+//                answers.put(result, 1);
+//            }
+//
+//            for (Result resultAux : answers.keySet()) {
+//                if (answers.get(resultAux) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+//                    awaitSignal.countDown();
+//                    System.out.println("Unblocking thread");
+//                }
+//            }
+//        }
     }
 
     /*

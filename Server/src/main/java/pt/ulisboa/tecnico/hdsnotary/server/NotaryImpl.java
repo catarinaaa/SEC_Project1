@@ -11,18 +11,28 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.MalformedURLException;
 import java.nio.charset.Charset;
+import java.rmi.Naming;
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import pt.gov.cartaodecidadao.PteidException;
+import pt.ulisboa.tecnico.hdsnotary.library.BroadcastMessage;
 import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
 import pt.ulisboa.tecnico.hdsnotary.library.Good;
 import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
@@ -56,6 +66,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	// Singleton
 	private static NotaryImpl instance = null;
 
+	private String[] notariesIDs = new String[]{"Notary1", "Notary2", "Notary3", "Notary4"};
+	private Map<String, NotaryInterface> remoteNotaries = new HashMap<>();
+
 	// List containing all goods
 	private Map<String, Good> goodsList = new HashMap<>();
 
@@ -81,6 +94,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private boolean useCC;
 
 	private CryptoUtilities cryptoUtils;
+
+	private List<BroadcastMessage> broadcastMessages = Collections
+		.synchronizedList(new ArrayList<>());
+
+	private ExecutorService service = Executors.newFixedThreadPool(4);
+
 
 	public static NotaryImpl getInstance(boolean useCC, String id) throws KeyStoreException {
 		if (instance == null) {
@@ -152,6 +171,22 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			e.printStackTrace();
 			System.exit(1);
 		}
+
+		locateNotaries();
+	}
+
+	private void locateNotaries() {
+		try {
+			String[] regList = Naming.list("//localhost:3000");
+			for (String s : regList) {
+				if (s.contains("Notary") && !s.contains(this.id)) {
+					remoteNotaries.put(s.replace("//localhost:3000/", ""),
+						(NotaryInterface) Naming.lookup(s));
+				}
+			}
+		} catch (MalformedURLException | RemoteException | NotBoundException e) {
+			System.err.println("ERROR looking up user");
+		}
 	}
 
 	public String getId() {
@@ -167,8 +202,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		if (userId == null) {
 			throw new NullPointerException();
 		}
-		if (verbose)
+		if (verbose) {
 			System.out.println("Generating nonce for user " + userId);
+		}
 		String nonce = cryptoUtils.generateCNonce();
 		nonceList.put(userId, nonce);
 		return nonce;
@@ -179,7 +215,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public Result intentionToSell(String userId, String goodId, int writeTimeStamp, String cnonce,
-								  byte[] signature)
+		byte[] signature)
 		throws RemoteException {
 		if (userId == null || goodId == null || cnonce == null || signature == null) {
 			throw new NullPointerException();
@@ -203,11 +239,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			System.out.println("-------------------------------\n");
 
 			Result result = new Result(new Boolean(true), good.getWriteTimestamp(),
-					cryptoUtils.signMessage(data + new Boolean(true).hashCode()));
+				cryptoUtils.signMessage(data + new Boolean(true).hashCode()));
 
 			// TODO test, not sure if it is working
 			Map<String, Integer> listening = good.getListening();
-			for(String listener : listening.keySet()) {
+			for (String listener : listening.keySet()) {
 				System.out.println("###################################");
 				System.out.println("Updating value " + userId);
 				UserInterface user = usersList.get(listener);
@@ -258,7 +294,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		System.out.println("ERROR getting state of good");
 		System.out.println("Good: " + good);
 		System.out.println("Signature verification: " + cryptoUtils
-				.verifySignature(userId, data, signature));
+			.verifySignature(userId, data, signature));
 		System.out.println("---------------------------\n");
 		// TODO change result
 		throw new StateOfGoodException(goodId);
@@ -270,8 +306,8 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public Transfer transferGood(String sellerId, String buyerId, String goodId, int writeTimestamp,
-								 String cnonce,
-								 byte[] signature) throws IOException, TransferException {
+		String cnonce,
+		byte[] signature) throws IOException, TransferException {
 
 		if (sellerId == null || buyerId == null || goodId == null || cnonce == null
 			|| signature == null) {
@@ -328,9 +364,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public void confirmRead(String id, String goodId, int readID, String cnonce, byte[] signMessage) throws RemoteException {
+	public void confirmRead(String id, String goodId, int readID, String cnonce, byte[] signMessage)
+		throws RemoteException {
 		Good good;
-		if((good = goodsList.get(goodId)) != null) {
+		if ((good = goodsList.get(goodId)) != null) {
 			good.removeListener(id, readID);
 		}
 	}
@@ -341,8 +378,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void recoverSellingList() throws IOException {
-		if (verbose)
+		if (verbose) {
 			System.out.println("Recovering selling list");
+		}
 		String line;
 		while ((line = inputSellings.readLine()) != null) {
 			if (verbose) {
@@ -356,8 +394,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void recoverTransactions() throws IOException {
-		if (verbose)
+		if (verbose) {
 			System.out.println("Recovering transactions");
+		}
 		String line;
 		String[] splitLine;
 		Good good;
@@ -371,10 +410,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				System.err.println("ERROR: Recovering line failed. Ignoring line...");
 				continue;
 			}
-			
-			if (verbose)
+
+			if (verbose) {
 				System.out.println(
-					"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
+					"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: "
+						+ splitLine[2]);
+			}
 			good = goodsList.get(splitLine[2]);
 			good.setUserId(splitLine[1]);
 			goodsList.put(splitLine[2], good);
@@ -602,4 +643,55 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		String data = toVerify + map.hashCode();
 		return new Result(map, cryptoUtils.signMessage(data));
 	}
+
+
+	public void broadcastMessage(byte[] signature) {
+		BroadcastMessage message = new BroadcastMessage(signature);
+
+		echoSelf(message);
+		//echoBroadcast(message);
+
+	}
+
+	public void echoSelf(BroadcastMessage message) {
+		// check if message exists in list broadcastMessages
+		// easy way xD
+		if (!broadcastMessages.stream()
+			.filter(o -> Arrays.equals(o.getSignature(), message.getSignature())).findFirst()
+			.isPresent()) {
+			message.addEcho(this.id);
+			broadcastMessages.add(message);
+		}
+
+		for (String notaryID : notariesIDs) {
+			if (notaryID.equals(this.id)) {
+				continue;
+			}
+
+			if (!remoteNotaries.containsKey(notaryID)) {
+				locateNotaries();
+			}
+
+			NotaryInterface notary = remoteNotaries.get(notaryID);
+
+			service.execute(() -> {
+				try {
+					notary.echoBroadcast(message);
+				} catch (RemoteException e) {
+					System.err.println("ERROR broadcasting echo to " + notaryID);
+				}
+			});
+		}
+	}
+
+	@Override
+	public void echoBroadcast(BroadcastMessage message) throws RemoteException {
+
+	}
+
+	@Override
+	public void readyBroadcast(BroadcastMessage message) throws RemoteException {
+
+	}
 }
+

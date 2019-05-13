@@ -29,4 +29,8 @@ public interface NotaryInterface extends Remote {
             throws RemoteException, InvalidSignatureException;
 
     void confirmRead(String id, String goodId, int readID, String cnonce, byte[] signMessage) throws RemoteException;
+
+    void echoBroadcast(BroadcastMessage message) throws RemoteException;
+
+    void readyBroadcast(BroadcastMessage message) throws RemoteException;
 }

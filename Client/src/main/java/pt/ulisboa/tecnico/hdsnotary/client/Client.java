@@ -10,13 +10,15 @@ import java.rmi.registry.Registry;
 import java.security.KeyStoreException;
 import java.util.Scanner;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+
 import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
 import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
 
 public class Client {
 
 	public static void main(String args[]) {
-
+		
 		System.out.println("Initializing Client");
 
 		int PORT = 3000;
@@ -30,7 +32,7 @@ public class Client {
 		Registry reg = null;
 
 		try {
-			TreeMap<String, NotaryInterface> notaries;
+			ConcurrentHashMap<String, NotaryInterface> notaries;
 			while( (notaries = locateNotaries()) == null) {
 				System.out.println("Trying to reconnect in 3 seconds...");
 				Thread.sleep(3000);
@@ -49,15 +51,15 @@ public class Client {
 				}
 				switch ((args.length > 0) ? Integer.parseInt(args[0]) : scanner.nextInt()) {
 					case 1:
-						user = new User("Alice", notaries, "Bob", "Charlie", false);
+						user = new User("Alice", notaries, false);
 						name = "Alice";
 						break;
 					case 2:
-						user = new User("Bob", notaries, "Alice", "Charlie", false);
+						user = new User("Bob", notaries, false);
 						name = "Bob";
 						break;
 					case 3:
-						user = new User("Charlie", notaries, "Alice", "Bob", false);
+						user = new User("Charlie", notaries, false);
 						name = "Charlie";
 						break;
 					default:
@@ -138,9 +140,9 @@ public class Client {
 		}
 	}
 
-	public static TreeMap<String, NotaryInterface> locateNotaries() {
+	public static ConcurrentHashMap<String, NotaryInterface> locateNotaries() {
 		try {
-			TreeMap<String, NotaryInterface> list = new TreeMap<>();
+			ConcurrentHashMap<String, NotaryInterface> list = new ConcurrentHashMap<>();
 			list.put("Notary1", (NotaryInterface) Naming.lookup("//localhost:3000/Notary1"));
 			list.put("Notary2", (NotaryInterface) Naming.lookup("//localhost:3000/Notary2"));
 			list.put("Notary3", (NotaryInterface) Naming.lookup("//localhost:3000/Notary3"));

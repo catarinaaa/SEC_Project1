@@ -10,7 +10,7 @@ public interface NotaryInterface extends Remote {
     String getNonce(String userId) throws RemoteException;
 
     Result intentionToSell(String userId, String goodId, int writeTimeStamp, String cnonce, byte[] signature)
-            throws RemoteException;
+            throws RemoteException, InvalidSignatureException;
 
     Result stateOfGood(String userId, int readID, String cnonce, String goodId, byte[] signature)
             throws RemoteException, StateOfGoodException;
@@ -30,7 +30,7 @@ public interface NotaryInterface extends Remote {
 
     void confirmRead(String id, String goodId, int readID, String cnonce, byte[] signMessage) throws RemoteException;
 
-    void echoBroadcast(BroadcastMessage message) throws RemoteException;
-
-    void readyBroadcast(BroadcastMessage message) throws RemoteException;
+//    void echoBroadcast(BroadcastMessage message) throws RemoteException;
+//
+//    void readyBroadcast(BroadcastMessage message) throws RemoteException;
 }

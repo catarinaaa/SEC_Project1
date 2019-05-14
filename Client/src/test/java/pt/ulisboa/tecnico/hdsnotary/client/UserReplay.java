@@ -95,7 +95,7 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 		}
 	
 	@Override
-	public Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature) throws IOException, TransferException {
+	public Transfer transferGood(String userId, String goodId, String cnonce, byte[] signature) throws IOException, TransferException {
 		try {
 			String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
 
@@ -124,7 +124,7 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 		}
 		catch(IOException e) {
 			rebind();
-			return buyGood(userId, goodId, cnonce, signature);
+			return transferGood(userId, goodId, cnonce, signature);
 		}
 	}
 	
@@ -150,16 +150,16 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 					String cnounce = cryptoUtils.generateCNonce();
 					nonceList.put(user2, cnounce);
 					String toSign = nounce + cnounce + this.id + goodId;
-					result = remoteUser2.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
-					result = remoteUser2.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+					result = remoteUser2.transferGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+					result = remoteUser2.transferGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
 				}
 				else if(seller.equals(user3) && remoteUser3 != null) {
 					String nounce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
 					String cnounce = cryptoUtils.generateCNonce();
 					nonceList.put(user3, cnounce);
 					String toSign = nounce + cnounce + this.id + goodId;
-					result = remoteUser3.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
-					result = remoteUser3.buyGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+					result = remoteUser3.transferGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
+					result = remoteUser3.transferGood(this.id, goodId, cnounce, cryptoUtils.signMessage(toSign));
 				}
 
 				goods.put(goodId, false);

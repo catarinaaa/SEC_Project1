@@ -218,22 +218,23 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public Result intentionToSell(String userId, String goodId, int writeTimeStamp, String cnonce,
-		byte[] signature)
-		throws RemoteException {
+		byte[] signature) throws RemoteException, InvalidSignatureException {
 		if (userId == null || goodId == null || cnonce == null || signature == null) {
 			throw new NullPointerException();
 		}
 
 		System.out
 			.println("------ INTENTION TO SELL ------\n" + "User: " + userId + "\tGood: " + goodId);
-		Good good;
+		
+		//verify signature
 		String data = nonceList.get(userId) + cnonce + userId + goodId + writeTimeStamp;
-
-		// verifies if good exists, user owns good, good is not already for sale and
-		// signature is valid
+		if(!cryptoUtils.verifySignature(userId, data, signature))
+			throw new InvalidSignatureException();
+		
+		Good good;
+		// user owns good, good is not already for sale and timestamp is more recent
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(userId)
-			&& !good.forSale() && cryptoUtils.verifySignature(userId, data, signature)
-			&& writeTimeStamp > good.getWriteTimestamp()) {
+			&& !good.forSale() && writeTimeStamp > good.getWriteTimestamp()) {
 			good.setForSale();
 			good.setWriteTimestamp(writeTimeStamp);
 			goodsList.put(goodId, good);
@@ -636,7 +637,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 
 		//process
-		TreeMap<String, Good> map = new TreeMap<>();
+		ConcurrentHashMap<String, Good> map = new ConcurrentHashMap<>();
 		for (Good good : goodsList.values()) {
 			if (good.getUserId().equals(userId)) {
 				map.put(good.getGoodId(), good);
@@ -648,52 +649,52 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 
-	public void broadcastMessage(byte[] signature) {
-		BroadcastMessage message = new BroadcastMessage(signature);
-
-		echoSelf(message);
-		//echoBroadcast(message);
-
-	}
-
-	public void echoSelf(BroadcastMessage msg) {
-		// check if message exists in list broadcastMessages
-		// easy way xD
-		if (!echoServers.contains(msg)) { {
-			echoServers.put(this.id, msg);
-		}
-
-		BroadcastMessage message = echoServers.get(this.id);
-
-		for (String notaryID : notariesIDs) {
-			if (notaryID.equals(this.id)) {
-				continue;
-			}
-
-			if (!remoteNotaries.containsKey(notaryID)) {
-				locateNotaries();
-			}
-
-			NotaryInterface notary = remoteNotaries.get(notaryID);
-
-			service.execute(() -> {
-				try {
-					notary.echoBroadcast(message);
-				} catch (RemoteException e) {
-					System.err.println("ERROR broadcasting echo to " + notaryID);
-				}
-			});
-		}
-	}
-
-	@Override
-	public void echoBroadcast(BroadcastMessage message) throws RemoteException {
-
-	}
-
-	@Override
-	public void readyBroadcast(BroadcastMessage message) throws RemoteException {
-
-	}
+//	public void broadcastMessage(byte[] signature) {
+//		BroadcastMessage message = new BroadcastMessage(signature);
+//
+//		echoSelf(message);
+//		//echoBroadcast(message);
+//
+//	}
+//
+//	public void echoSelf(BroadcastMessage msg) {
+//		// check if message exists in list broadcastMessages
+//		// easy way xD
+//		if (!echoServers.contains(msg)) { {
+//			echoServers.put(this.id, msg);
+//		}
+//
+//		BroadcastMessage message = echoServers.get(this.id);
+//
+//		for (String notaryID : notariesIDs) {
+//			if (notaryID.equals(this.id)) {
+//				continue;
+//			}
+//
+//			if (!remoteNotaries.containsKey(notaryID)) {
+//				locateNotaries();
+//			}
+//
+//			NotaryInterface notary = remoteNotaries.get(notaryID);
+//
+//			service.execute(() -> {
+//				try {
+//					notary.echoBroadcast(message);
+//				} catch (RemoteException e) {
+//					System.err.println("ERROR broadcasting echo to " + notaryID);
+//				}
+//			});
+//		}
+//	}
+//
+//	@Override
+//	public void echoBroadcast(BroadcastMessage message) throws RemoteException {
+//
+//	}
+//
+//	@Override
+//	public void readyBroadcast(BroadcastMessage message) throws RemoteException {
+//
+//	}
 }
 

@@ -1,57 +1,54 @@
 package pt.ulisboa.tecnico.hdsnotary.library;
 
 import java.io.Serializable;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Objects;
 
 public class BroadcastMessage implements Serializable {
 
-	private ConcurrentHashMap<String, Boolean> echo = new ConcurrentHashMap<>();
-	private ConcurrentHashMap<String, Boolean> ready = new ConcurrentHashMap<>();
-	private ConcurrentHashMap<String, Boolean> delivered = new ConcurrentHashMap<>();
+	private final String goodId;
+	private final String writerId;
+	private final String newOwner;
+	private final Boolean forSale;
+	private final int timeStamp;
 
-	private byte[] signature;
-
-	public BroadcastMessage(byte[] signature) {
-		this.signature = signature;
+	public BroadcastMessage(String goodId, Boolean forSale, String writerId, int timeStamp) {
+		this.goodId = goodId;
+		this.forSale = forSale;
+		this.writerId = writerId;
+		this.timeStamp = timeStamp;
+		this.newOwner = null;
 	}
 
-	public void addEcho(String serverId) {
-		echo.put(serverId, true);
+	public BroadcastMessage(String goodId, String newOwner, String writerId, int timeStamp) {
+		this.goodId = goodId;
+		this.newOwner = newOwner;
+		this.writerId = writerId;
+		this.timeStamp = timeStamp;
+		this.forSale = null;
 	}
 
-	public void addReady(String serverId) {
-		ready.put(serverId, true);
+	public String getGoodId() {
+		return goodId;
 	}
 
-	public void addDelivered(String serverId) {
-		delivered.put(serverId, true);
+	public String getWriterId() {
+		return writerId;
 	}
 
-	public ConcurrentHashMap<String, Boolean> getEcho() {
-		return echo;
+	public String getNewOwner() {
+		return newOwner;
 	}
 
-	public ConcurrentHashMap<String, Boolean> getReady() {
-		return ready;
+	public Boolean getForSale() {
+		return forSale;
 	}
 
-	public ConcurrentHashMap<String, Boolean> getDelivered() {
-		return delivered;
+	public int getTimeStamp() {
+		return timeStamp;
 	}
 
-	public boolean getEchoServer(String serverId) {
-		return echo.get(serverId);
-	}
-
-	public boolean getReadyServer(String serverId) {
-		return ready.get(serverId);
-	}
-
-	public boolean getDeliveredServer(String serverId) {
-		return delivered.get(serverId);
-	}
-
-	public byte[] getSignature() {
-		return signature;
+	@Override
+	public int hashCode() {
+		return Objects.hash(goodId, writerId, newOwner, forSale, timeStamp);
 	}
 }

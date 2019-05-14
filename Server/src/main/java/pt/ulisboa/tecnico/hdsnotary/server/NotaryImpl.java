@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import pt.gov.cartaodecidadao.PteidException;
@@ -95,11 +96,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private CryptoUtilities cryptoUtils;
 
-	private List<BroadcastMessage> broadcastMessages = Collections
-		.synchronizedList(new ArrayList<>());
+//	private List<BroadcastMessage> broadcastMessages = Collections
+//		.synchronizedList(new ArrayList<>());
 
 	private ExecutorService service = Executors.newFixedThreadPool(4);
 
+	private ConcurrentHashMap<String, BroadcastMessage> echoServers = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<String, BroadcastMessage> readyServers = new ConcurrentHashMap<>();
 
 	public static NotaryImpl getInstance(boolean useCC, String id) throws KeyStoreException {
 		if (instance == null) {
@@ -653,15 +656,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	}
 
-	public void echoSelf(BroadcastMessage message) {
+	public void echoSelf(BroadcastMessage msg) {
 		// check if message exists in list broadcastMessages
 		// easy way xD
-		if (!broadcastMessages.stream()
-			.filter(o -> Arrays.equals(o.getSignature(), message.getSignature())).findFirst()
-			.isPresent()) {
-			message.addEcho(this.id);
-			broadcastMessages.add(message);
+		if (!echoServers.contains(msg)) { {
+			echoServers.put(this.id, msg);
 		}
+
+		BroadcastMessage message = echoServers.get(this.id);
 
 		for (String notaryID : notariesIDs) {
 			if (notaryID.equals(this.id)) {

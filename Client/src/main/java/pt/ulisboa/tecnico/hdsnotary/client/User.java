@@ -513,6 +513,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
     }
 
     @Override
+    // TODO test
     public void updateValue(String notaryId, Result result, String nonce, byte[] signature) throws RemoteException {
 
         System.out.println("Hello world!\nThis is a test");

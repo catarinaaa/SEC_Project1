@@ -315,8 +315,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
                     System.out.println("------------------");
                 }
                 return true;
-
-
             }
 
         } catch (IOException e) {

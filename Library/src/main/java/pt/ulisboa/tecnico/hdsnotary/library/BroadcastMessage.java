@@ -11,20 +11,12 @@ public class BroadcastMessage implements Serializable {
 	private final Boolean forSale;
 	private final int timeStamp;
 
-	public BroadcastMessage(String goodId, Boolean forSale, String writerId, int timeStamp) {
+	public BroadcastMessage(String goodId, Boolean forSale, String writerId, String newOwner, int timeStamp) {
 		this.goodId = goodId;
 		this.forSale = forSale;
 		this.writerId = writerId;
 		this.timeStamp = timeStamp;
-		this.newOwner = null;
-	}
-
-	public BroadcastMessage(String goodId, String newOwner, String writerId, int timeStamp) {
-		this.goodId = goodId;
 		this.newOwner = newOwner;
-		this.writerId = writerId;
-		this.timeStamp = timeStamp;
-		this.forSale = null;
 	}
 
 	public String getGoodId() {

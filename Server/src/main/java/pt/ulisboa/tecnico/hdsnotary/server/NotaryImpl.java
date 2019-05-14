@@ -22,16 +22,15 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import pt.gov.cartaodecidadao.PteidException;
 import pt.ulisboa.tecnico.hdsnotary.library.BroadcastMessage;
 import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
@@ -63,6 +62,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private final String SELLINGLISTPATH;
 	private final String TEMPFILE;
 	private final Boolean verbose = false;
+
+	private static final int NUM_NOTARIES = 4;
+	private static final int NUM_FAULTS = 1;
 
 	// Singleton
 	private static NotaryImpl instance = null;
@@ -101,8 +103,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private ExecutorService service = Executors.newFixedThreadPool(4);
 
-	private ConcurrentHashMap<String, BroadcastMessage> echoServers = new ConcurrentHashMap<>();
-	private ConcurrentHashMap<String, BroadcastMessage> readyServers = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<BroadcastMessage, ArrayList<String>> echoServers = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<BroadcastMessage, ArrayList<String>> readyServers = new ConcurrentHashMap<>();
+
+	private ConcurrentHashMap<BroadcastMessage, Boolean> sentReady = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<BroadcastMessage, Boolean> delivered = new ConcurrentHashMap<>();
+
+	private CountDownLatch deliveredSignal;
 
 	public static NotaryImpl getInstance(boolean useCC, String id) throws KeyStoreException {
 		if (instance == null) {
@@ -234,6 +241,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(userId)
 			&& !good.forSale() && cryptoUtils.verifySignature(userId, data, signature)
 			&& writeTimeStamp > good.getWriteTimestamp()) {
+
+			// Broadcast message
+			if(!broadcastMessage(goodId, true, userId, null, writeTimeStamp))
+				return new Result(new Boolean(false), good.getWriteTimestamp(),
+					cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
+
 			good.setForSale();
 			good.setWriteTimestamp(writeTimeStamp);
 			goodsList.put(goodId, good);
@@ -299,7 +312,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		System.out.println("Signature verification: " + cryptoUtils
 			.verifySignature(userId, data, signature));
 		System.out.println("---------------------------\n");
-		// TODO change result
 		throw new StateOfGoodException(goodId);
 	}
 
@@ -648,28 +660,42 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 
-	public void broadcastMessage(byte[] signature) {
-		BroadcastMessage message = new BroadcastMessage(signature);
+	public boolean broadcastMessage(String goodId, Boolean forSale, String writerId, String newOwner, int timeStamp) {
+		BroadcastMessage message = new BroadcastMessage(goodId, forSale, writerId, newOwner, timeStamp);
+
+		if(!echoServers.containsKey(message)) echoServers.put(message, new ArrayList<>());
+		if(!readyServers.containsKey(message)) readyServers.put(message, new ArrayList<>());
+//		if(!sentReady.containsKey(message)) sentReady.put(message, false);
+//		if(!delivered.containsKey(message)) delivered.put(message, false);
+
+		deliveredSignal = new CountDownLatch(1);
 
 		echoSelf(message);
-		//echoBroadcast(message);
+
+		try {
+			System.out.println("WAITING FOR DELIVERIES");
+			if(!deliveredSignal.await(15, TimeUnit.SECONDS))
+				return false;
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+			System.out.println("Timeout");
+			return false;
+		}
+		return true;
 
 	}
 
-	public void echoSelf(BroadcastMessage msg) {
+	public void echoSelf(BroadcastMessage message) {
 		// check if message exists in list broadcastMessages
 		// easy way xD
-		if (!echoServers.contains(msg)) { {
-			echoServers.put(this.id, msg);
-		}
-
-		BroadcastMessage message = echoServers.get(this.id);
+		echoServers.get(message).add(this.id);
 
 		for (String notaryID : notariesIDs) {
 			if (notaryID.equals(this.id)) {
 				continue;
 			}
 
+			// manhoso
 			if (!remoteNotaries.containsKey(notaryID)) {
 				locateNotaries();
 			}
@@ -678,7 +704,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 			service.execute(() -> {
 				try {
-					notary.echoBroadcast(message);
+					notary.echoBroadcast(message, this.id);
 				} catch (RemoteException e) {
 					System.err.println("ERROR broadcasting echo to " + notaryID);
 				}
@@ -687,13 +713,80 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public void echoBroadcast(BroadcastMessage message) throws RemoteException {
+	public void echoBroadcast(BroadcastMessage message, String serverID) throws RemoteException {
+		System.out.println(this.id + " ECHO BROADCAST FROM " + serverID);
+		if (!echoServers.containsKey(message)) {
+			echoServers.put(message, new ArrayList<>());
+		}
+
+		if(echoServers.get(message).contains(serverID)) {
+			echoServers.get(message).add(serverID);
+		}
+
+		if(!sentReady.containsKey(message)) {
+			sentReady.put(message, false);
+		}
+
+		if(!delivered.containsKey(message)) {
+			delivered.put(message, false);
+		}
+
+		if(!echoServers.get(message).contains(serverID)) {
+			echoServers.get(message).add(serverID);
+		}
+
+		System.out.println("echoServers size: " + (echoServers.get(message).size() + " " + (echoServers.get(message).size() > (NUM_NOTARIES + NUM_FAULTS) / 2)));
+		System.out.println("sentReady: " + sentReady.get(message));
+
+		if (echoServers.get(message).size() > (NUM_NOTARIES + NUM_FAULTS) / 2 && !sentReady.get(message)) {
+			triggerSendReady(message);
+			System.out.println("READY COMPLETED");
+		}
 
 	}
 
 	@Override
-	public void readyBroadcast(BroadcastMessage message) throws RemoteException {
+	public void readyBroadcast(BroadcastMessage message, String serverID) throws RemoteException {
+		System.out.println(this. id + " READY BROADCAST FROM " + serverID );
+		if (!readyServers.get(message).contains(serverID)) {
+			readyServers.get(message).add(serverID);
+		}
 
+		if (readyServers.keySet().size() > NUM_FAULTS && !sentReady.get(message)) {
+			triggerSendReady(message);
+
+		} else if (readyServers.get(message).size() > 2 * NUM_FAULTS && !delivered.get(message)) {
+			delivered.put(message, true);
+			deliveredSignal.countDown();
+		}
+
+
+	}
+
+	private void triggerSendReady(BroadcastMessage message) {
+		sentReady.put(message, true);
+
+		for (String notaryID : notariesIDs) {
+			NotaryInterface notary;
+			if (notaryID.equals(this.id)) {
+				notary = this;
+			} else {
+				// manhoso
+				if (!remoteNotaries.containsKey(notaryID)) {
+					locateNotaries();
+				}
+				notary = remoteNotaries.get(notaryID);
+			}
+
+			service.execute(() -> {
+				try {
+					notary.readyBroadcast(message, this.id);
+				} catch (RemoteException e) {
+					e.printStackTrace();
+				}
+			});
+
+		}
 	}
 }
 

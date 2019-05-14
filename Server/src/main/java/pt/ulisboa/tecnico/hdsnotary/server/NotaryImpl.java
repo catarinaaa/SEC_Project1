@@ -18,6 +18,8 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -32,6 +34,8 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
+
 import pt.gov.cartaodecidadao.PteidException;
 import pt.ulisboa.tecnico.hdsnotary.library.BroadcastMessage;
 import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
@@ -229,22 +233,23 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		//verify signature
 		String data = nonceList.get(userId) + cnonce + userId + goodId + writeTimeStamp;
 		if(!cryptoUtils.verifySignature(userId, data, signature))
-			throw new InvalidSignatureException();
+			throw new InvalidSignatureException(userId);
 		
 		Good good;
-		// user owns good, good is not already for sale and timestamp is more recent
+		// user owns good, good is not already for sale and timestamp is recent
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(userId)
 			&& !good.forSale() && writeTimeStamp > good.getWriteTimestamp()) {
 			good.setForSale();
 			good.setWriteTimestamp(writeTimeStamp);
 			goodsList.put(goodId, good);
 			sellingListUpdate(good.getGoodId());
-			System.out.println("Result: TRUE");
-			System.out.println("-------------------------------\n");
+			System.out.println("Result: TRUE\n-------------------------------\n");
 
+			//send signed result
 			Result result = new Result(new Boolean(true), good.getWriteTimestamp(),
 				cryptoUtils.signMessage(data + new Boolean(true).hashCode()));
 
+			//
 			// TODO test, not sure if it is working
 			Map<String, Integer> listening = good.getListening();
 			for (String listener : listening.keySet()) {
@@ -259,8 +264,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 			return result;
 		} else {
-			System.out.println("Result: FALSE");
-			System.out.println("-------------------------------\n");
+			System.out.println("Result: FALSE\n-------------------------------\n");
 			return new Result(new Boolean(false), good.getWriteTimestamp(),
 				cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
 		}
@@ -273,7 +277,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	@Override
 	public Result stateOfGood(String userId, int readID, String cnonce, String goodId,
 		byte[] signature)
-		throws RemoteException, StateOfGoodException {
+		throws RemoteException, StateOfGoodException, InvalidSignatureException {
 
 		if (userId == null || cnonce == null || goodId == null || signature == null) {
 			throw new NullPointerException();
@@ -281,12 +285,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 		System.out.println("------ STATE OF GOOD ------\nUser: " + userId + "\tGood: " + goodId);
 
+		//verify signature of received message
 		String data = nonceList.get(userId) + cnonce + userId + goodId + readID;
-
+		if(!cryptoUtils.verifySignature(userId, data, signature))
+			throw new InvalidSignatureException(userId);
+			
 		Good good;
-		if ((good = goodsList.get(goodId)) != null && cryptoUtils
-			.verifySignature(userId, data, signature)) {
-
+		if ((good = goodsList.get(goodId)) != null) {
 			good.setListener(userId, readID);
 			Boolean status = good.forSale();
 			System.out.println("Owner: " + good.getUserId() + "\nFor Sale: " + status);
@@ -310,8 +315,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	 */
 	@Override
 	public Transfer transferGood(String sellerId, String buyerId, String goodId, int writeTimestamp,
-		String cnonce,
-		byte[] signature) throws IOException, TransferException {
+		String cnonce, byte[] signature) throws IOException, TransferException, InvalidSignatureException {
 
 		if (sellerId == null || buyerId == null || goodId == null || cnonce == null
 			|| signature == null) {
@@ -319,52 +323,58 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 
 		System.out.println("------ TRANSFER GOOD ------");
-
 		System.out.println("Seller: " + sellerId);
 		System.out.println("Buyer: " + buyerId);
 		System.out.println("Good: " + goodId);
 
+		//verifies signature of received message
 		String data = nonceList.get(sellerId) + cnonce + sellerId + buyerId + goodId;
-		Good good;
-
-		// verifies if the good exists, if the good is owned by the seller and if it is for sale, and if the signature
-		// verifies
-
-		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(sellerId)
-			&& good.forSale() && cryptoUtils.verifySignature(sellerId, data, signature)
-			&& writeTimestamp > good.getWriteTimestamp()) {
-			good.setUserId(buyerId);
-			good.notForSale();
-			good.setWriteTimestamp(writeTimestamp);
-			goodsList.put(goodId, good);
-			saveTransfer(sellerId, buyerId, goodId);
-			removeSelling(goodId);
-
-			// Sign transfer with Cartao Do Cidadao
-			try {
-				String toSign = transferId + buyerId + sellerId + goodId;
-				System.out.println("Verify: " + toSign);
-				Transfer transfer = new Transfer(transferId++, buyerId, sellerId, good,
-					useCC ? signWithCC(toSign) : cryptoUtils.signMessage(toSign));
-				System.out.println("Result: TRUE");
-				System.out.println("---------------------------");
-				printGoods();
-				return transfer;
-			} catch (PKCS11Exception e) {
-				System.err.println("ERROR: Signing with CC not possible");
-				System.out.println("Result: FALSE");
-				System.out.println("---------------------------");
-				printGoods();
-				e.printStackTrace();
-				throw new TransferException("Signing with CC not possible!");
-			}
-
+		if(!cryptoUtils.verifySignature(sellerId, data, signature))
+			throw new InvalidSignatureException(sellerId);
+		
+		//verifies the anti-spam mechanism worked
+		MessageDigest md = null;
+		try {
+			md = MessageDigest.getInstance("SHA-256");
+		} catch (NoSuchAlgorithmException e1) {	} 
+		byte[] messageDigest = md.digest(data.getBytes());
+		if(!Pattern.matches("1234.*", cryptoUtils.byteArrayToHex(messageDigest))) {
+			System.out.println("Result: NO\n---------------------------");
+			throw new TransferException("ERROR: anti-spam mechanism failed");
 		}
-		System.out.println("Result: NO");
-		System.out.println("---------------------------");
-		printGoods();
-		throw new TransferException("ERROR");
+		Good good;
+		// verifies if the good exists, if the good is owned by the seller and if it is for sale, 
+		// write timestamp is recent and anti-spam mechanism matches
+		if (!((good = goodsList.get(goodId)) != null && good.getUserId().equals(sellerId)
+			&& good.forSale() && writeTimestamp > good.getWriteTimestamp())) {
+			System.out.println("Result: NO\n---------------------------");
+			printGoods();
+			throw new TransferException("ERROR: ");
+		}
+		
+		//process transfer, updates good and database
+		good.setUserId(buyerId);
+		good.notForSale();
+		good.setWriteTimestamp(writeTimestamp);
+		goodsList.put(goodId, good);
+		saveTransfer(sellerId, buyerId, goodId);
+		removeSelling(goodId);
 
+		// Sign transfer with Cartao Do Cidadao
+		try {
+			String toSign = transferId + buyerId + sellerId + goodId;
+			System.out.println("Verify: " + toSign);
+			Transfer transfer = new Transfer(transferId++, buyerId, sellerId, good,
+				useCC ? signWithCC(toSign) : cryptoUtils.signMessage(toSign));
+			System.out.println("Result: TRUE\n---------------------------");
+			printGoods();
+			return transfer;
+		} catch (PKCS11Exception e) {
+			System.err.println("ERROR: Signing with CC not possible");
+			System.out.println("Result: FALSE\n---------------------------");
+			printGoods();
+			throw new TransferException("ERROR: Signing with CC not possible!");
+		}
 	}
 
 	@Override
@@ -376,11 +386,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 	}
 
-	private byte[] signWithCC(String string) throws PKCS11Exception {
-		System.out.println("Signing with Cartao Do Cidadao");
-		return pkcs11.C_Sign(p11_session, string.getBytes(Charset.forName("UTF-8")));
-	}
+	//---------------------------------- DB functions ----------------------------------	
 
+	
 	private void recoverSellingList() throws IOException {
 		if (verbose) {
 			System.out.println("Recovering selling list");
@@ -513,6 +521,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 	}
 
+	
+//---------------------------------- CC functions ----------------------------------	
+	
+	private byte[] signWithCC(String string) throws PKCS11Exception {
+		System.out.println("Signing with Cartao Do Cidadao");
+		return pkcs11.C_Sign(p11_session, string.getBytes(Charset.forName("UTF-8")));
+	}
 
 	private void setupCititzenCard()
 		throws PteidException, CertificateException, pteidlib.PteidException,
@@ -633,7 +648,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		//verify sender
 		String toVerify = nonceList.get(userId) + cnonce + userId;
 		if (!cryptoUtils.verifySignature(userId, toVerify, signature)) {
-			throw new InvalidSignatureException();
+			throw new InvalidSignatureException(userId);
 		}
 
 		//process

@@ -213,5 +213,12 @@ public class CryptoUtilities {
 	public String generateCNonce() {
 		return new BigInteger(256, secRandom).toString();
 	}
+	
+    public String byteArrayToHex(byte[] a) {
+ 	   StringBuilder sb = new StringBuilder(a.length * 2);
+ 	   for(byte b: a)
+ 	      sb.append(String.format("%02x", b));
+ 	   return sb.toString();
+ }
 
 }

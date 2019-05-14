@@ -13,12 +13,12 @@ public interface NotaryInterface extends Remote {
             throws RemoteException, InvalidSignatureException;
 
     Result stateOfGood(String userId, int readID, String cnonce, String goodId, byte[] signature)
-            throws RemoteException, StateOfGoodException;
+            throws RemoteException, StateOfGoodException, InvalidSignatureException;
 
     Transfer transferGood(String sellerId, String buyerId, String goodId, int writeTimeStamp,
                           String cnonce,
                           byte[] signature)
-            throws RemoteException, IOException, TransferException;
+            throws RemoteException, IOException, TransferException, InvalidSignatureException;
 
     X509Certificate getCertificateCC() throws RemoteException;
 

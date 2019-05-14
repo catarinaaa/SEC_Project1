@@ -82,7 +82,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
         cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password);
 
-        System.out.println("Initializing user " + id);
+        //System.out.println("Initializing user " + id);
 
         System.out.println("1");
         connectToNotary();
@@ -324,7 +324,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
             
             Result stateOfGood = stateOfGood(goodId);
             if (stateOfGood == null || false == (Boolean) stateOfGood.getContent()) {
-                throw new TransferException("ERROR: stateOfGoof failed");
+                throw new TransferException("ERROR: stateOfGood failed");
             }
             String seller = stateOfGood.getUserId();
 

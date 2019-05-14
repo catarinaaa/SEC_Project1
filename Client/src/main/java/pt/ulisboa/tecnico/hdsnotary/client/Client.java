@@ -72,9 +72,9 @@ public class Client {
 				Thread.sleep(3000);
 			}
 			
-			for (String s : reg.list()) {
-				System.out.println("Name > " + s);
-			}
+//			for (String s : reg.list()) {
+//				System.out.println("Name > " + s);
+//			}
 			
 			Boolean exit = false;
 

@@ -130,13 +130,17 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 		try {
 			
+			if (verbose)
+				System.out.println("Creating new SELLING LIST files");
 			for (String path : SELLINGLISTPATH) {
-				createSellingListFiles(path);
+				createFiles(path);
 			}
 			recoverSellingList();
-
+			
+			if (verbose)
+				System.out.println("Creating new TRANSACTIONS files");
 			for (String path : TRANSACTIONSPATH) {
-				createTransactionsFiles(path);
+				createFiles(path);
 			}
 			recoverTransactions();
 
@@ -195,6 +199,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			good.setWriterId(userId);
 			goodsList.put(goodId, good);
 			sellingListUpdate(good.getGoodId());
+			sellingListUpdate(String.valueOf(writeTimeStamp));
 			System.out.println("Result: TRUE");
 			System.out.println("-------------------------------\n");
 			return new Result(new Boolean(true), good.getWriteTimestamp(),
@@ -281,7 +286,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			good.setSignature(writeSignature);
 			good.setWriterId(sellerId);
 			goodsList.put(goodId, good);
-			saveTransfer(sellerId, buyerId, goodId);
+			saveTransfer(sellerId, buyerId, goodId, String.valueOf(writeTimestamp));
 			removeSelling(goodId);
 
 			// Sign transfer with Cartao Do Cidadao
@@ -320,15 +325,19 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		if (verbose)
 			System.out.println("Recovering selling list");
 		String line;
+		sellingListFile = new File(SELLINGLISTPATH[1]);
 		inputSellings = new BufferedReader(new FileReader(sellingListFile));
 		try {
 			while ((line = inputSellings.readLine()) != null) {
 				if (verbose) {
-					System.out.println("--> " + line);
-					System.out.println("GoodId: " + line);
+					System.out.println("GoodId: " + line + " is for sale");
 				}
 				Good good = goodsList.get(line);
 				good.setForSale();
+				line = inputSellings.readLine();
+				if (verbose)
+					System.out.println("Timestamp of good --> " + line);
+				good.setWriteTimestamp(Integer.parseInt(line));
 			}
 		} catch (IOException e) {
 			System.out.println("Using backup file");
@@ -336,11 +345,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			try {
 				while ((line = inputSellings.readLine()) != null) {
 					if (verbose) {
-						System.out.println("--> " + line);
-						System.out.println("GoodId: " + line);
+						System.out.println("GoodId: " + line + " is for sale");
 					}
 					Good good = goodsList.get(line);
 					good.setForSale();
+					line = inputSellings.readLine();
+					if (verbose)
+						System.out.println("Timestamp of good --> " + line);
+					good.setWriteTimestamp(Integer.parseInt(line));
 				}
 			} catch (IOException e1) {
 				System.out.println("OMG BACKUP IS ALSO CORRUPTED! Could not recover selling list");
@@ -354,6 +366,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		String line;
 		String[] splitLine;
 		Good good;
+		transactionsFile = new File(TRANSACTIONSPATH[1]);
 		inputTransactions = new BufferedReader(new FileReader(transactionsFile));
 
 		try {
@@ -361,18 +374,18 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				splitLine = line.split(";");
 
 				//checks if line is well constructed
-				if (splitLine.length != 3 || splitLine[0] == null || splitLine[1] == null
-					|| splitLine[2] == null) {
+				if (splitLine.length != 4 || splitLine[0] == null || splitLine[1] == null
+					|| splitLine[2] == null || splitLine[3] == null) {
 					System.err.println("ERROR: Recovering line failed. Ignoring line...");
 					continue;
 				}
 				
 				if (verbose)
 					System.out.println(
-						"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
+						"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2] + " Timestamp: " + splitLine[3]);
 				good = goodsList.get(splitLine[2]);
 				good.setUserId(splitLine[1]);
-				goodsList.put(splitLine[2], good);
+				good.setWriteTimestamp(Integer.parseInt(splitLine[3]));
 			}
 		} catch (IOException e) {
 			System.out.println("Using backup file");
@@ -382,9 +395,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 					splitLine = line.split(";");
 
 					//checks if line is well constructed
-					if (splitLine.length != 3 || splitLine[0] == null || splitLine[1] == null
-						|| splitLine[2] == null) {
-						System.err.println("ERROR: Recovering line failed. Ignoring line...");
+					if (splitLine.length != 4 || splitLine[0] == null || splitLine[1] == null
+							|| splitLine[2] == null || splitLine[3] == null)  {
+						System.err.println("ERROR: Recovering line in backup file failed. Ignoring line...");
 						continue;
 					}
 					
@@ -393,7 +406,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 							"Seller: " + splitLine[0] + " Buyer: " + splitLine[1] + " Good: " + splitLine[2]);
 					good = goodsList.get(splitLine[2]);
 					good.setUserId(splitLine[1]);
-					goodsList.put(splitLine[2], good);
+					good.setWriteTimestamp(Integer.parseInt(splitLine[3]));
 				}
 			} catch (IOException e1) {
 				System.out.println("OMG BACKUP IS ALSO CORRUPTED! Could not recover TRANSACTIONS list");
@@ -403,11 +416,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	}
 
-	private void saveTransfer(String sellerId, String buyerId, String goodId) {
+	private void saveTransfer(String sellerId, String buyerId, String goodId, String writeTimestamp) {
 		try {
 			for (String path : TRANSACTIONSPATH) {
 				outputTransactions = new BufferedWriter(new FileWriter(new File(path), true));
-				outputTransactions.write(sellerId + ";" + buyerId + ";" + goodId + "\n");
+				outputTransactions.write(sellerId + ";" + buyerId + ";" + goodId + ";" + writeTimestamp + "\n");
 				outputTransactions.flush();
 			}
 		} catch (IOException e) {
@@ -447,6 +460,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				// trim newline when comparing with lineToRemove
 				String trimmedLine = currentLine.trim();
 				if (trimmedLine.equals(goodId)) {
+					inputSellings.readLine(); //skips next line (timestamp)
 					continue;
 				}
 				tempWriter.write(currentLine + ("\n"));
@@ -467,8 +481,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	public void stop() {
 		try {
 			inputTransactions.close();
-			outputTransactions.close();
-			outputSellings.close();
+			if (outputTransactions != null)
+				outputTransactions.close();
+			if (outputSellings != null)
+				outputSellings.close();
 			inputSellings.close();
 
 			if (useCC) {
@@ -481,23 +497,11 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 
 	}
-
-	private void createTransactionsFiles(String path) throws IOException {
-		// creates file with all transactions and file with selling list
-		transactionsFile = new File(path);
-		if (!transactionsFile.exists()) {
-			transactionsFile.createNewFile();
-			if (verbose)
-				System.out.println("Creating new TRANSACTIONS file");
-		}
-	}
 	
-	private void createSellingListFiles(String path) throws IOException {
-		sellingListFile = new File(path);
-		if (!sellingListFile.exists()) {
-			sellingListFile.createNewFile();
-			if (verbose)
-				System.out.println("Creating new SELLING LIST file");
+	private void createFiles(String path) throws IOException {
+		File file= new File(path);
+		if (!file.exists()) {
+			file.createNewFile();
 		}
 	}
 

@@ -14,4 +14,6 @@ public interface UserInterface extends Remote {
 	X509Certificate getCertificate() throws RemoteException;
 	
 	void connectUser(String id, X509Certificate cert) throws RemoteException;
+
+	void updateValue(String notaryId, Result result, String nonce, byte[] signature) throws RemoteException;
 }

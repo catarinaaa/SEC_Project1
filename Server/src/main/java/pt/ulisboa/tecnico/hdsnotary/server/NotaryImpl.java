@@ -14,6 +14,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -35,6 +40,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.FileHandler;
+
 import pt.gov.cartaodecidadao.PteidException;
 import pt.ulisboa.tecnico.hdsnotary.library.BroadcastMessage;
 import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
@@ -945,6 +952,49 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			});
 
 		}
+	}
+
+	@Override
+	public void recoverErrors() throws IOException {
+		System.out.println("FIXING ERROR SELLING LIST!");
+		Path myPath = Paths.get(SELLINGLISTPATH[1]);
+		FileTime myTime = Files.getLastModifiedTime(myPath);
+		System.out.println("My time -> " + myTime);
+		
+		//Estou a fazer batota para este path funcionar
+		int myId = this.id.charAt(this.id.length() - 1);
+		int nextId = (myId % 4) + 1;
+		Path otherPath = Paths.get("Server/storage/sellingNotary" + nextId + ".txt");
+		FileTime nextTime = Files.getLastModifiedTime(otherPath);
+		System.out.println("Time of next notary -> " + nextTime);
+		
+		if(myTime.compareTo(nextTime) < 0) {
+			System.out.println("COPIANDO...");
+			Files.copy(otherPath, myPath, StandardCopyOption.REPLACE_EXISTING);
+			Files.copy(otherPath, Paths.get(SELLINGLISTPATH[0]), StandardCopyOption.REPLACE_EXISTING);
+		}
+		
+		recoverSellingList();
+		
+		//######
+		//recuperar transactions
+		System.out.println("FIXING ERROR TRANSACTION LIST!");
+		myPath = Paths.get(TRANSACTIONSPATH[1]);
+		myTime = Files.getLastModifiedTime(myPath);
+		System.out.println("My time -> " + myTime);
+		
+		//Estou a fazer batota para este path funcionar
+		otherPath = Paths.get("Server/storage/transactionsNotary" + nextId + ".txt");
+		nextTime = Files.getLastModifiedTime(otherPath);
+		System.out.println("Time of next notary -> " + nextTime);
+		
+		if(myTime.compareTo(nextTime) < 0) {
+			System.out.println("COPIANDO...");
+			Files.copy(otherPath, myPath, StandardCopyOption.REPLACE_EXISTING);
+			Files.copy(otherPath, Paths.get(TRANSACTIONSPATH[0]), StandardCopyOption.REPLACE_EXISTING);
+		}
+		
+		recoverTransactions();
 	}
 }
 

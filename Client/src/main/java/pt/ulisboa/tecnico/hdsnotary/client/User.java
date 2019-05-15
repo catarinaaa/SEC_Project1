@@ -304,20 +304,20 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			e.printStackTrace();
 			throw new TransferException("ERROR: quorum waiting failed");
 		}
-
+		
 		//checks if enough notaries respond
 		if (acksList.size() + failedAcksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
 			System.out.println("--> Quorum reached");
 			if (verbose) {
 				System.out.println("--> Removing good " + goodId + " from my list");
 			}
+			notaryRecover();
 			if (acksList.size() > failedAcksList.size()) {
 				goods.remove(goodId);
 				return (Result) acksList.values().toArray()[0];
 			} else {
 				throw new TransferException("ERROR: transfer not possible");
 			}
-
 		} else {
 			System.out.println("--> Quorum not reached...    :(");
 			throw new TransferException("ERROR: quorum not reached");
@@ -401,7 +401,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 		for (String notaryID : notaryServers.keySet()) {
 			NotaryInterface notary = notaryServers.get(notaryID);
-			test++;
+			//test++;
 			try {
 
 				if (test == 1) {
@@ -480,11 +480,15 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				System.out.println("--> AcksList: " + acksList.size());
 			}
 			System.out.println("--> Quorum Reached");
-
+			notaryRecover();
 			if (acksList.size() > failedAcksList.size()) {
 				goods.get(goodId).setForSale();
 				goodToSell.setWriteTimestamp(writeTimeStamp);
 				System.out.println("Result: TRUE\n------------------");
+				if (failedAcksList.size()!= 0) {
+					System.out.println("Ocorreram problemas, tentando recuperar!");
+					notaryRecover();
+				}
 			} else {
 				System.out.println("Result: FALSE\n------------------");
 			}
@@ -494,6 +498,18 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			System.out.println("Result: FALSE\n------------------");
 
 		}
+	}
+
+	private void notaryRecover() {
+		for (String notaryID : notaryServers.keySet()) {
+			NotaryInterface notary = notaryServers.get(notaryID);
+			try {
+				notary.recoverErrors();
+			} catch (IOException e) {
+				System.err.println("ERROR -> IO Exception -> isto esta a explodir");
+			}
+		}
+		
 	}
 
 	/*
@@ -508,7 +524,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		readID++;
 
 		AtomicInteger exceptions = new AtomicInteger(0);
-
+		notaryRecover();
 		for (String notaryID : notaryServers.keySet()) {
 			NotaryInterface notary = notaryServers.get(notaryID);
 

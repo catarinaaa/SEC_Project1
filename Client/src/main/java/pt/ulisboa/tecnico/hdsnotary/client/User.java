@@ -80,13 +80,15 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password);
 
 		//System.out.println("Initializing user " + id);
-
-		System.out.println("1");
+		
+		if (verbose)
+			System.out.println("1");
 		connectToNotary();
-		System.out.println("2");
+		if (verbose)
+			System.out.println("2");
 		getGoodFromUser();
-		System.out.println("3");
-
+		if (verbose)
+			System.out.println("3");
 		connectToUsers();
 
 	}
@@ -138,25 +140,25 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			String cnonce = cryptoUtils.generateCNonce();
 			String toSign = notary.getNonce(this.id) + cnonce + this.id;
 			Result res = null;
-			System.out.println("g1");
+			//System.out.println("g1");
 
 			try {
 				res = notary.getGoodsFromUser(this.id, cnonce, cryptoUtils.signMessage(toSign));
 			} catch (InvalidSignatureException e) {
 				System.err.println(e.getMessage());
 			}
-			System.out.println("g2");
+			//System.out.println("g2");
 
 			//verify received message
 			String toVerify = toSign + res.getContent().hashCode();
 			if (!cryptoUtils.verifySignature(notaryID, toVerify, res.getSignature())) {
 				System.err.println("ERROR: Signature could not be verified");
 			}
-			System.out.println("g3");
+			//System.out.println("g3");
 
 			map = (ConcurrentHashMap<String, Good>) res.getContent();
 
-			System.out.println("g3.1");
+			//System.out.println("g3.1");
 		}
 
 		if (verbose) {
@@ -244,8 +246,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
 //                        hashed = cryptoUtils.byteArrayToHex(messageDigest);
 //                    }
 					data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
-
-					System.out.println("--> hash generated: " + nonceToNotary);
+					
+					if (verbose)
+						System.out.println("--> hash generated: " + nonceToNotary);
 
 					//send signed message to notary
 					Transfer transfer = notary

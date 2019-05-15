@@ -47,7 +47,7 @@ public class NotaryServer {
 			
 			System.in.read();
 			obj.stop();
-			Naming.unbind("//localhost:3000/" + obj.getId());
+			reg.unbind(id);
 			System.out.println("Server terminated");
 			System.exit(0);
 

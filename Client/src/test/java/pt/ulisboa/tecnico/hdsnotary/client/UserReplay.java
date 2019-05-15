@@ -95,7 +95,7 @@ public class UserReplay extends UnicastRemoteObject implements UserInterface {
 		}
 	
 	@Override
-	public Transfer transferGood(String userId, String goodId, String cnonce, byte[] signature) throws IOException, TransferException {
+	public Result transferGood(String userId, String goodId, String cnonce, byte[] signature) throws IOException, TransferException {
 		try {
 			String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
 

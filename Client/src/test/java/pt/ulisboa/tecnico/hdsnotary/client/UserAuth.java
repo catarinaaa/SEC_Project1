@@ -95,7 +95,7 @@ public class UserAuth extends UnicastRemoteObject implements UserInterface {
 	 * Invoked when another user is buying a good that this user owns
 	 */
 	@Override
-	public Transfer transferGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
+	public Result transferGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
 
 		try {
 

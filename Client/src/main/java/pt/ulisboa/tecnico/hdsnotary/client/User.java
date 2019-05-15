@@ -14,6 +14,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -130,12 +131,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
     /*
      * Function to obtain goods owned by the user
      */
-    public void getGoodFromUser() throws RemoteException {
+    public synchronized void getGoodFromUser() throws RemoteException {
         ConcurrentHashMap<String, Good> map = null;
 
         for (String notaryID : notaryServers.keySet()) {
             NotaryInterface notary = notaryServers.get(notaryID);
-            
+
             //send signed message
             String cnonce = cryptoUtils.generateCNonce();
             String toSign = notary.getNonce(this.id) + cnonce + this.id;
@@ -157,6 +158,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
             System.out.println("g3");
 
             map = (ConcurrentHashMap<String, Good>) res.getContent();
+
+            System.out.println("g3.1");
         }
 
         if (verbose) {
@@ -199,13 +202,17 @@ public class User extends UnicastRemoteObject implements UserInterface {
         return nonce;
     }
 
-   
-    
+
     /*
      * Invoked when another user is buying a good that this user owns
      */
     @Override
-    public synchronized Transfer transferGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
+    public synchronized Result transferGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException, InvalidSignatureException {
+
+        //verify message received from other user
+        String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
+        if (!cryptoUtils.verifySignature(userId, toVerify, signature))
+            throw new InvalidSignatureException(userId);
 
         Good goodToSell = goods.get(goodId);
 
@@ -214,52 +221,55 @@ public class User extends UnicastRemoteObject implements UserInterface {
         if (verbose)
             System.out.println("--> WriteTimeStamp sent: " + writeTimeStamp);
 
-        ConcurrentHashMap<String, Transfer> acksList = new ConcurrentHashMap<>();
+        ConcurrentHashMap<String, Result> acksList = new ConcurrentHashMap<>();
+        ConcurrentHashMap<String, Result> failedAcksList = new ConcurrentHashMap<>();
+
         CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
 
         for (String notaryID : notaryServers.keySet()) {
             service.execute(() -> {
                 try {
-                    Transfer result;
-                    NotaryInterface notary = notaryServers.get(notaryID);
 
-                    //verify message received from other user
-                    String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
-                    if (!cryptoUtils.verifySignature(userId, toVerify, signature))
-                        throw new InvalidSignatureException(userId);
-                   
+                    NotaryInterface notary = notaryServers.get(notaryID);
 
                     //anti-spam mechanism
                     String nonceToNotary = cryptoUtils.generateCNonce();
-                    MessageDigest md = MessageDigest.getInstance("SHA-256"); 
+                    MessageDigest md = MessageDigest.getInstance("SHA-256");
                     String hashed = "";
                     String data = "";
-                    while(!Pattern.matches("1234.*", hashed)) {
-                    	nonceToNotary = ((new BigInteger(nonceToNotary)).add(BigInteger.ONE)).toString();
-                    	data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
-                        byte[] messageDigest = md.digest(data.getBytes()); 
-                        hashed = cryptoUtils.byteArrayToHex(messageDigest);
-                    }
+//                    while (!Pattern.matches("000.*", hashed)) {
+//                        nonceToNotary = ((new BigInteger(nonceToNotary)).add(BigInteger.ONE)).toString();
+//                        data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
+//                        byte[] messageDigest = md.digest(data.getBytes());
+//                        hashed = cryptoUtils.byteArrayToHex(messageDigest);
+//                    }
+                    data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
+
                     System.out.println("--> hash generated: " + nonceToNotary);
-                    
+
                     //send signed message to notary           
-                    result = notary.transferGood(this.getId(), userId, goodId, writeTimeStamp, nonceToNotary,
+                    Transfer transfer = notary.transferGood(this.getId(), userId, goodId, writeTimeStamp, nonceToNotary,
                             cryptoUtils.signMessage(data));
-                    
+
+
                     //verify signature with CC
                     String transferVerify =
-                            result.getId() + result.getBuyerId() + result.getSellerId() + result.getGood().getGoodId();
-                    if(verifyCC)
-                    	if(!cryptoUtils.verifySignature(NOTARY_CC, transferVerify, result.getNotarySignature(),
-                                    notaryServers.get(notaryID).getCertificateCC()))
-                    		throw new InvalidSignatureException(NOTARY_CC);
-                    	
-                    if (result.getGood().getWriteTimestamp() == writeTimeStamp) {
-                        acksList.put(notaryID, result);
+                            transfer.getId() + transfer.getBuyerId() + transfer.getSellerId() + transfer.getGood().getGoodId();
+                    if (verifyCC)
+                        if (!cryptoUtils.verifySignature(NOTARY_CC, transferVerify, transfer.getNotarySignature(),
+                                notaryServers.get(notaryID).getCertificateCC()))
+                            throw new InvalidSignatureException(NOTARY_CC);
+
+
+                    if (transfer.getGood().getWriteTimestamp() == writeTimeStamp) {
+                        String toSign = toVerify + transfer.hashCode();
+                        Result resultClient = new Result(transfer, writeTimeStamp, cryptoUtils.signMessage(toSign));
+
+                        acksList.put(notaryID, resultClient);
                         awaitSignal.countDown();
-                    } else 
-                    	throw new TransferException("ERROR: Timestamp does not match");
-                    
+                    } else
+                        throw new TransferException("ERROR: Timestamp does not match");
+
                     if (verbose)
                         System.out.println("--> CC Signature verified! Notary confirmed buy good");
                     return;
@@ -267,13 +277,13 @@ public class User extends UnicastRemoteObject implements UserInterface {
                     rebind();
                     return;
                 } catch (InvalidSignatureException | TransferException e) {
-                	System.err.println(e.getMessage());
-                    acksList.put(notaryID, null);
-                	awaitSignal.countDown();
+                    System.err.println(e.getMessage());
+                    failedAcksList.put(notaryID, new Result(new Boolean(false), cryptoUtils.signMessage("false")));
+                    awaitSignal.countDown();
                 } catch (NoSuchAlgorithmException e) {
-                    acksList.put(notaryID, null);
-                	awaitSignal.countDown();
-				}
+                    failedAcksList.put(notaryID, new Result(new Boolean(false), cryptoUtils.signMessage("false")));
+                    awaitSignal.countDown();
+                }
             });
         }
 
@@ -285,43 +295,31 @@ public class User extends UnicastRemoteObject implements UserInterface {
         }
 
         //checks if enough notaries respond
-        if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+        if (acksList.size() + failedAcksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
             System.out.println("--> Quorum reached");
             if (verbose)
                 System.out.println("--> Removing good " + goodId + " from my list");
-            
-            //find highest timestamp to return
-            //ensures the response is fresh
-            Transfer maxGood = null;
-            for(Map.Entry<String, Transfer> e : acksList.entrySet()) {
-            	if(e.getValue() != null)
-            		if(maxGood == null)
-            			maxGood = e.getValue();
-            		else if(maxGood.getGood().getWriteTimestamp() < e.getValue().getGood().getWriteTimestamp())
-            			maxGood = e.getValue();
-            }         
-            if(maxGood != null) {
-            	goods.remove(goodId);
-            	return maxGood;
-            }
-            else throw new TransferException("ERROR: transfer not possible");
+            if (acksList.size() > failedAcksList.size()) {
+                goods.remove(goodId);
+                return (Result) acksList.values().toArray()[0];
+            } else throw new TransferException("ERROR: transfer not possible");
+
         } else {
             System.out.println("--> Quorum not reached...    :(");
             throw new TransferException("ERROR: quorum not reached");
         }
     }
 
-    
-    
+
     /*
      * Invoked when a user wants to buy a good
      */
-    public void buying(String goodId) {
+    public synchronized void buying(String goodId) {
         try {
             if (goods.containsKey(goodId)) {
                 throw new TransferException("ERROR: good already owned");
             }
-            
+
             Result stateOfGood = stateOfGood(goodId);
             if (stateOfGood == null || false == (Boolean) stateOfGood.getContent()) {
                 throw new TransferException("ERROR: stateOfGood failed");
@@ -333,16 +331,16 @@ public class User extends UnicastRemoteObject implements UserInterface {
                 connectToUsers();
 
             //send signed message
-            Transfer result;
+            Result result;
             String nonce = remoteUsers.get(seller).getNonce(this.id, cryptoUtils.signMessage(this.id));
             String cnonce = cryptoUtils.generateCNonce();
             nonceList.put(seller, cnonce);
             String toSign = nonce + cnonce + this.id + goodId;
             result = remoteUsers.get(seller).transferGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
-            
+
             //TODO verify sign
-            
-            goods.put(goodId, result.getGood());
+
+            goods.put(goodId, ((Transfer) result.getContent()).getGood());
             if (verbose) {
                 System.out.println("-->" + goodId + " was added to the list of goods!");
                 System.out.println("Result: TRUE\n------------------");
@@ -351,8 +349,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
             rebind();
             buying(goodId);
         } catch (TransferException e) {
-        	System.err.println(e.getMessage());
+            System.err.println(e.getMessage());
             System.out.println("Result: FALSE\n------------------");
+        } catch (InvalidSignatureException e) {
+            System.out.println("Result: INVALID SIGNATURE EXCEPTION\n------------------");
         }
     }
 
@@ -375,14 +375,34 @@ public class User extends UnicastRemoteObject implements UserInterface {
             System.out.println("WriteTimeStamp: " + writeTimeStamp);
 
         ConcurrentHashMap<String, Result> acksList = new ConcurrentHashMap<>();
+        ConcurrentHashMap<String, Result> failedAcksList = new ConcurrentHashMap<>();
 
         CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
 
+        int test = 0;
+
         for (String notaryID : notaryServers.keySet()) {
             NotaryInterface notary = notaryServers.get(notaryID);
+            test++;
+            try {
+
+                if(test == 1) {
+                    System.out.println("Sleeping");
+                    Thread.sleep(2000);
+                }
+                else if(test == 3) {
+                    System.out.println("Sleeping");
+                    Thread.sleep(3000);
+                }
+
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
             service.execute(() -> {
-                try {                    
-                	//send signed message
+
+               try {
+                    //send signed message
                     String nonce = notary.getNonce(this.id);
                     String cnonce = cryptoUtils.generateCNonce();
                     String data = nonce + cnonce + this.id + goodId + writeTimeStamp;
@@ -390,10 +410,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
                     //verify signature of receive message
                     if (!cryptoUtils.verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature()))
-                    	throw new InvalidSignatureException(notaryID);
+                        throw new InvalidSignatureException(notaryID);
                     if (verbose)
                         System.out.println("Received WriteTimeStamp: " + result.getWriteTimestamp());
-                    
+
                     //check if timestamp matches
                     if ((Boolean) result.getContent() && result.getWriteTimestamp() == writeTimeStamp) {
                         acksList.put(notaryID, result);
@@ -402,15 +422,15 @@ public class User extends UnicastRemoteObject implements UserInterface {
                             System.out.println("NotaryID: " + notaryID + "\nResult: " + (Boolean) result.getContent());
 
                     } else {
-                        acksList.put(notaryID, null);
+                        failedAcksList.put(notaryID, new Result(new Boolean(false), cryptoUtils.signMessage("false")));
                         awaitSignal.countDown();
                         System.out.println("Result: Invalid good");
                     }
 
                 } catch (RemoteException e) {
                     rebind();
-                } catch(InvalidSignatureException e) {
-                	acksList.put(notaryID, null);
+                } catch (InvalidSignatureException e) {
+                    failedAcksList.put(notaryID, new Result(new Boolean(false), cryptoUtils.signMessage("false")));
                     awaitSignal.countDown();
                 }
             });
@@ -426,20 +446,18 @@ public class User extends UnicastRemoteObject implements UserInterface {
         }
 
         // checks if quorum was reached
-        if (acksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+        if (acksList.size() + failedAcksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
             if (verbose)
                 System.out.println("--> AcksList: " + acksList.size());
             System.out.println("--> Quorum Reached");
-            
-            Result result = findMaxResult(new ArrayList<Result>(acksList.values()));       
 
-            if(result != null) {
-	            goods.get(goodId).setForSale();
-	            goodToSell.setWriteTimestamp(writeTimeStamp);
-	            System.out.println("Result: TRUE\n------------------");
+
+            if(acksList.size() > failedAcksList.size()) {
+                goods.get(goodId).setForSale();
+                goodToSell.setWriteTimestamp(writeTimeStamp);
+                System.out.println("Result: TRUE\n------------------");
             } else
                 System.out.println("Result: FALSE\n------------------");
-            	
 
         } else {
             System.out.println("--> Quorum not reached...");
@@ -451,7 +469,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
     /*
      * Invoked to get current state of a good, it returns the current owner and if it is for sale or not
      */
-    public synchronized Result stateOfGood(String goodId) {
+    public Result stateOfGood(String goodId) {
 
         answers.clear();
 
@@ -461,13 +479,14 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
         AtomicInteger exceptions = new AtomicInteger(0);
 
-        for (String notaryID : notaryServers.keySet()) {
+                for (String notaryID : notaryServers.keySet()) {
             NotaryInterface notary = notaryServers.get(notaryID);
 
             service.execute(() -> {
-            	Result result = null;
+                Result result = null;
+
                 try {
-                	//send signed message
+                    //send signed message
                     String cnonce = cryptoUtils.generateCNonce();
                     String data = notary.getNonce(this.id) + cnonce + this.id + goodId + readID;
 
@@ -477,7 +496,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
                     //verify received message
                     if (!cryptoUtils
                             .verifySignature(notaryID, data + result.getContent().hashCode(), result.getSignature()) && result.getReadID() == readID)
-                    	throw new InvalidSignatureException(notaryID);
+                        throw new InvalidSignatureException(notaryID);
 
 
                     int count = answers.containsKey(result) ? answers.get(result) + 1 : 1;
@@ -498,10 +517,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
                     rebind();
                 } catch (StateOfGoodException | InvalidSignatureException e) {
                     System.out.println(notaryID + ": " + e.getMessage());
-                    if(exceptions.incrementAndGet() == 4)
+                    if (exceptions.incrementAndGet() == 4)
                         awaitSignal.countDown();
                 }
-                
+
                 if (answers.get(result) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
                     System.out.println("Sending signal " + answers.get(result));
                     awaitSignal.countDown();
@@ -556,23 +575,27 @@ public class User extends UnicastRemoteObject implements UserInterface {
     public void updateValue(String notaryId, Result result, String nonce, byte[] signature) throws RemoteException {
 
         System.out.println("Hello world!\nThis is a test");
-        //        String toVerify = nonceList.get(notaryId) + nonce + notaryId + result.hashCode();
-//
-//        if (cryptoUtils.verifySignature(notaryId, toVerify, signature)) {
-//            System.out.println("Updating value");
-//            if (answers.containsKey(result)) {
-//                answers.replace(result, answers.get(result) + 1);
-//            } else {
-//                answers.put(result, 1);
-//            }
-//
-//            for (Result resultAux : answers.keySet()) {
-//                if (answers.get(resultAux) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
-//                    awaitSignal.countDown();
-//                    System.out.println("Unblocking thread");
-//                }
-//            }
-//        }
+        //String toVerify = nonceList.get(notaryId) + nonce + notaryId + result.hashCode();
+
+        //if (cryptoUtils.verifySignature(notaryId, toVerify, signature)) {
+         if(true) {
+            System.out.println("Updating value");
+            if (answers.containsKey(result)) {
+                System.out.println("S1");
+                answers.replace(result, answers.get(result) + 1);
+            } else {
+                System.out.println("S2");
+
+                answers.put(result, 1);
+            }
+
+            for (Result resultAux : answers.keySet()) {
+                if (answers.get(resultAux) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+                    awaitSignal.countDown();
+                    System.out.println("Unblocking thread");
+                }
+            }
+        }
     }
 
     /*
@@ -609,20 +632,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
         } catch (MalformedURLException | RemoteException | NotBoundException e) {
             System.err.println("ERROR looking up user");
         }
-    }
-
-    /*
-     * Return the ack result with the highest timestamp
-     */
-    
-    private Result findMaxResult(List<Result> resultsList) {
-        int max = 0;
-        for (int i = 0; i < resultsList.size(); i++) {
-            if (resultsList.get(i).getWriteTimestamp() > resultsList.get(max).getWriteTimestamp()) {
-                max = i;
-            }
-        }
-        return resultsList.get(max);
     }
 
 

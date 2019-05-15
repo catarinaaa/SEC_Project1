@@ -9,7 +9,7 @@ public interface UserInterface extends Remote {
 	
 	String getNonce(String userId, byte[] signature) throws RemoteException;
 	
-	Transfer transferGood(String userId, String goodId, String cnonce, byte[] signature) throws RemoteException, IOException, TransferException;
+	Result transferGood(String userId, String goodId, String cnonce, byte[] signature) throws RemoteException, IOException, TransferException, InvalidSignatureException;
 
 	X509Certificate getCertificate() throws RemoteException;
 	

@@ -83,11 +83,21 @@ public class Result implements Serializable {
             return false;
         }
         return (userId.equals(r.getUserId()) && content.equals(r.getContent())
-                && writeTimestamp == r.writeTimestamp);
+                && writeTimestamp == r.writeTimestamp && readID == r.getReadID());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(this.userId, this.content, this.writeTimestamp);
+        return Objects.hash(this.userId, this.content, this.writeTimestamp, this.readID);
     }
+
+	@Override
+	public String toString() {
+		return "Result{" +
+			"content=" + content +
+			", userId='" + userId + '\'' +
+			", writeTimestamp=" + writeTimestamp +
+			", readID=" + readID +
+			'}';
+	}
 }

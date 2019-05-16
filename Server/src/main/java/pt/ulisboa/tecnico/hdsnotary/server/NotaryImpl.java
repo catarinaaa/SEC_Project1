@@ -14,11 +14,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.FileTime;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -30,9 +25,6 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,9 +32,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.FileHandler;
 import java.util.regex.Pattern;
-
 import pt.gov.cartaodecidadao.PteidException;
 import pt.ulisboa.tecnico.hdsnotary.library.BroadcastMessage;
 import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
@@ -110,13 +100,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private CryptoUtilities cryptoUtils;
 
-//	private List<BroadcastMessage> broadcastMessages = Collections
-//		.synchronizedList(new ArrayList<>());
-
 	private ExecutorService service = Executors.newFixedThreadPool(4);
 
-	private List<BroadcastMessage> broadcastMessagesReceived = Collections
-		.synchronizedList(new ArrayList<>());
+	private ConcurrentHashMap<BroadcastMessage, ArrayList<String>> echoServers = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<BroadcastMessage, ArrayList<String>> readyServers = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<BroadcastMessage, Boolean> sentEcho = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<BroadcastMessage, Boolean> sentReady = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<BroadcastMessage, Boolean> delivered = new ConcurrentHashMap<>();
 
 	private CountDownLatch deliveredSignal;
 
@@ -264,9 +254,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			&& !good.forSale() && writeTimeStamp > good.getWriteTimestamp()) {
 
 			// Broadcast message
-//            if (!broadcastMessage(goodId, true, userId, "", writeTimeStamp))
-//                return new Result(new Boolean(false), good.getWriteTimestamp(),
-//                        cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
+            if (!broadcastMessage(goodId, true, userId, "", writeTimeStamp))
+                return new Result(new Boolean(false), good.getWriteTimestamp(),
+                        cryptoUtils.signMessage(data + new Boolean(false).hashCode()));
 
 			good.setForSale();
 			System.out.println("TimeStamp: " + writeTimeStamp);
@@ -391,16 +381,16 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		} catch (NoSuchAlgorithmException e1) {
 		}
 		byte[] messageDigest = md.digest(data.getBytes());
-        if (!Pattern.matches("000.*", cryptoUtils.byteArrayToHex(messageDigest))) {
-            System.out.println("Result: NO\n---------------------------");
-            throw new TransferException("ERROR: anti-spam mechanism failed");
-        }
+		if (!Pattern.matches("000.*", cryptoUtils.byteArrayToHex(messageDigest))) {
+			System.out.println("Result: NO\n---------------------------");
+			throw new TransferException("ERROR: anti-spam mechanism failed");
+		}
 		Good good;
 
 		// Broadcast message
-//		if (!broadcastMessage(goodId, false, sellerId, "", writeTimestamp)) {
-//			throw new TransferException("ERROR broadcasting message");
-//		}
+		if (!broadcastMessage(goodId, false, sellerId, "", writeTimestamp)) {
+			throw new TransferException("ERROR broadcasting message");
+		}
 
 		// verifies if the good exists, if the good is owned by the seller and if it is for sale,
 		// write timestamp is recent and anti-spam mechanism matches
@@ -805,6 +795,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 		deliveredSignal = new CountDownLatch(1);
 
+		sentReady.put(message, false);
+		sentEcho.put(message, false);
+		delivered.put(message, false);
+
 		echoSelf(message);
 
 		try {
@@ -823,26 +817,21 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	public void echoSelf(BroadcastMessage message) {
-		// check if message exists in list broadcastMessages
-		// easy way xD
-		BroadcastMessage msg;
-		if (!broadcastMessagesReceived.contains(message)) {
-			broadcastMessagesReceived.add(message);
-			msg = message;
 
-		} else {
-			msg = broadcastMessagesReceived.get(broadcastMessagesReceived.indexOf(message));
-
-		}
-
-		msg.addEchoServer(this.id);
+		echoServers.compute(message, (key, value) -> {
+			if(value == null)
+				return new ArrayList<>();
+			else {
+				value.add(this.id);
+				return value;
+			}
+		});
 
 		for (String notaryID : notariesIDs) {
 			if (notaryID.equals(this.id)) {
 				continue;
 			}
 
-			// manhoso
 			if (!remoteNotaries.containsKey(notaryID)) {
 				locateNotaries();
 			}
@@ -851,7 +840,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			System.out.println("SENDING ECHO");
 			service.execute(() -> {
 				try {
-					notary.echoBroadcast(msg, this.id);
+					notary.echoBroadcast(message, this.id);
 				} catch (RemoteException e) {
 					System.err.println("ERROR broadcasting echo to " + notaryID);
 				}
@@ -863,37 +852,18 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	public void echoBroadcast(BroadcastMessage message, String serverID) throws RemoteException {
 		System.out.println(this.id + " ECHO BROADCAST FROM " + serverID);
 
-		BroadcastMessage msg;
-
-		if (!broadcastMessagesReceived.stream().anyMatch(o -> o.equals(message))) {
-			broadcastMessagesReceived.add(message);
-			msg = message;
-//            System.out.println("TEST 1");
-		} else {
-//            System.out.println("TEST 2");
-			msg = broadcastMessagesReceived.get(broadcastMessagesReceived.indexOf(message));
-
-			for (String id : message.getEchoServers()) {
-				if (!msg.getEchoServers().contains(id)) {
-					System.out.println("Adding to message");
-					msg.addEchoServer(id);
-				}
+		echoServers.compute(message, (key, value) -> {
+			if(value == null)
+				return new ArrayList<>();
+			else {
+				value.add(this.id);
+				return value;
 			}
+		});
 
-		}
 
-//        System.out.println("echoServers size: " + (msg.echoServersSize() + " " + (msg.echoServersSize() > (NUM_NOTARIES + NUM_FAULTS) / 2)));
-//        System.out.println("sentReady: " + msg.checkReadyServer(this.id));
-//        System.out.println(msg);
-
-//        for (String i : msg.getEchoServers()) {
-//            System.out.println("ServerInMessage: " + i);
-//        }
-
-		if (msg.echoServersSize() > (NUM_NOTARIES + NUM_FAULTS) / 2 && !msg
-			.checkReadyServer(this.id)) {
-			triggerSendReady(msg);
-//            System.out.println("READY COMPLETED");
+		if (echoServers.get(message).size() > (NUM_NOTARIES + NUM_FAULTS) / 2 && !sentEcho.get(message)) {
+			triggerSendReady(message);
 		}
 
 	}
@@ -902,27 +872,20 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	public void readyBroadcast(BroadcastMessage message, String serverID) throws RemoteException {
 		System.out.println(this.id + " READY BROADCAST FROM " + serverID);
 
-		BroadcastMessage msg;
-
-		if (!broadcastMessagesReceived.contains(message)) {
-			broadcastMessagesReceived.add(message);
-			msg = message;
-		} else {
-			msg = broadcastMessagesReceived.get(broadcastMessagesReceived.indexOf(message));
-
-			for (String id : message.getEchoServers()) {
-				if (!msg.getReadyServers().contains(id)) {
-					msg.addReadyServer(id);
-				}
+		readyServers.compute(message, (key, value) -> {
+			if(value == null)
+				return new ArrayList<>();
+			else {
+				value.add(this.id);
+				return value;
 			}
+		});
 
-		}
+		if (readyServers.get(message).size() > NUM_FAULTS && !sentReady.get(message)) {
+			triggerSendReady(message);
 
-		if (msg.readyServersSize() > NUM_FAULTS && !msg.checkReadyServer(this.id)) {
-			triggerSendReady(msg);
-
-		} else if (msg.readyServersSize() > 2 * NUM_FAULTS && !msg.checkDeliveredServer(this.id)) {
-			msg.addDeliveredServer(this.id);
+		} else if (readyServers.get(message).size() > 2 * NUM_FAULTS && !delivered.get(message)) {
+			delivered.replace(message, false, true);
 			deliveredSignal.countDown();
 		}
 
@@ -930,7 +893,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	private void triggerSendReady(BroadcastMessage message) {
-		message.addReadyServer(this.id);
+		sentReady.replace(message, false, true);
 
 		for (String notaryID : notariesIDs) {
 			NotaryInterface notary;
@@ -955,46 +918,5 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		}
 	}
 
-	@Override
-	public void recoverErrors() throws IOException {
-		//maroscas para os logs sincronizarem entre eles
-		Path myPath = Paths.get(SELLINGLISTPATH[1]);
-		FileTime myTime = Files.getLastModifiedTime(myPath);
-		System.out.println("My time -> " + myTime);
-		
-		//Estou a fazer batota para ir buscar este path diretamente
-		int myId = this.id.charAt(this.id.length() - 1);
-		int nextId = (myId % 4) + 1;
-		Path otherPath = Paths.get("Server/storage/sellingNotary" + nextId + ".log");
-		FileTime nextTime = Files.getLastModifiedTime(otherPath);
-		System.out.println("Time of next notary -> " + nextTime);
-		
-		if(myTime.compareTo(nextTime) < 0) {
-			System.out.println("COPIANDO...");
-			Files.copy(otherPath, myPath, StandardCopyOption.REPLACE_EXISTING);
-			Files.copy(otherPath, Paths.get(SELLINGLISTPATH[0]), StandardCopyOption.REPLACE_EXISTING);
-		}
-		
-		recoverSellingList();
-		
-		
-		//recuperar transactions
-		myPath = Paths.get(TRANSACTIONSPATH[1]);
-		myTime = Files.getLastModifiedTime(myPath);
-		System.out.println("My time -> " + myTime);
-		
-		//Estou a fazer batota para ir buscar este path diretamente
-		otherPath = Paths.get("Server/storage/transactionsNotary" + nextId + ".log");
-		nextTime = Files.getLastModifiedTime(otherPath);
-		System.out.println("Time of next notary -> " + nextTime);
-		
-		if(myTime.compareTo(nextTime) < 0) {
-			System.out.println("COPIANDO...");
-			Files.copy(otherPath, myPath, StandardCopyOption.REPLACE_EXISTING);
-			Files.copy(otherPath, Paths.get(TRANSACTIONSPATH[0]), StandardCopyOption.REPLACE_EXISTING);
-		}
-		
-		recoverTransactions();
-	}
 }
 

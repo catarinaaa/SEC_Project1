@@ -34,6 +34,4 @@ public interface NotaryInterface extends Remote {
 
     void readyBroadcast(BroadcastMessage message, String serverID) throws RemoteException;
 
-	void recoverErrors() throws IOException;
-
 }

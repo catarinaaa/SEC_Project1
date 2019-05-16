@@ -16,4 +16,4 @@ echo "Notary ID = " $1
 echo "Use CC = " $2
 
 echo "Starting Server..."
-java -Djava.library.path=/usr/local/lib -Dfile.encoding=UTF-8 -classpath Server/classes:Library/classes:Server/lib/pteidlibj.jar pt.ulisboa.tecnico.hdsnotary.server.NotaryServer $1 $2 $3
+java -Djava.library.path=/usr/local/lib -Dfile.encoding=UTF-8 -classpath Server/classes:Library/classes:Server/lib/pteidlibj.jar pt.ulisboa.tecnico.hdsnotary.server.NotaryServer $1 $2 $3 $4

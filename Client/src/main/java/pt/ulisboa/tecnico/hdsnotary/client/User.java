@@ -44,6 +44,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	private final String id;
 	private final Boolean verifyCC;
 	private final Boolean verbose = false;
+	private final int demo;
 
 	// List of all goods possessed
 	private ConcurrentHashMap<String, Good> goods;
@@ -69,12 +70,19 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 
 	public User(String id, ConcurrentHashMap<String, NotaryInterface> notaryServers,
-		Boolean verifyCC)
+		Boolean verifyCC, int demo)
 		throws RemoteException, KeyStoreException, InvalidSignatureException {
 
 		this.id = id;
 		this.notaryServers = notaryServers;
 		this.verifyCC = verifyCC;
+		this.demo = demo;
+		if (demo == 2) {
+			System.out.println("Delaying IntentionToSell");
+		}
+		else if(demo == 4) {
+			System.out.println("Byzantine client");
+		}
 
 		this.keysPath = "Client/storage/" + id + ".p12";
 		this.password = id + "1234";
@@ -400,32 +408,43 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
 
 		int test = 0;
+		AtomicInteger demo4 = new AtomicInteger(0);
 
+		// if demo is Read while Write, delay two writes
+		// if demo is Byzantine Client, send one wrong value to notaries each IntentionToSell
 		for (String notaryID : notaryServers.keySet()) {
 			NotaryInterface notary = notaryServers.get(notaryID);
-			test++;
-			try {
+			if (demo == 2) {
+				test++;
+				try {
 
-				if (test == 1) {
-					System.out.println("Sleeping");
-					Thread.sleep(2000);
-				} else if (test == 3) {
-					System.out.println("Sleeping");
-					Thread.sleep(3000);
+					if (test == 1) {
+						System.out.println("Sleeping");
+						Thread.sleep(2000);
+					} else if (test == 3) {
+						System.out.println("Sleeping");
+						Thread.sleep(3000);
+					}
+
+				} catch (InterruptedException e) {
+					e.printStackTrace();
 				}
-
-			} catch (InterruptedException e) {
-				e.printStackTrace();
 			}
 
 			service.execute(() -> {
 
 				try {
 					//send signed message
+					boolean modify = false;
+					if(demo == 4) {
+						modify = demo4.incrementAndGet() == 2;
+						System.out.println("Sending wrong timeStamp");
+					}
+
 					String nonce = notary.getNonce(this.id);
 					String cnonce = cryptoUtils.generateCNonce();
 					String data = nonce + cnonce + this.id + goodId + writeTimeStamp;
-					Result result = notary.intentionToSell(this.id, goodId, writeTimeStamp, cnonce,
+					Result result = notary.intentionToSell(this.id, goodId, modify ? 1000 : writeTimeStamp, cnonce,
 						cryptoUtils.signMessage(data));
 
 					//verify signature of receive message
@@ -528,6 +547,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
 						.stateOfGood(this.getId(), readID, cnonce, goodId,
 							cryptoUtils.signMessage(data));
 
+					System.out.println("ReadID: " + readID + " : " + result.getReadID());
+
 					//verify received message
 					if (!cryptoUtils
 						.verifySignature(notaryID, data + result.getContent().hashCode(),
@@ -590,7 +611,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		if (result == null) {
 			System.err.println("ERROR ERROR ERROR ERROR");
 		} else {
-			if (answers.keySet().size() == 1)
+			if (answers.keySet().size() == 1 && answers.get(result) == 4)
 				System.out.println("All answers match. Quorum Reached!");
 			else {
 				System.out.println("Quorum Reached (one notary failed)");
@@ -624,11 +645,8 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		throws RemoteException {
 
 		String toVerify = nonceList.get(notaryId) + nonce + notaryId + result.hashCode();
-		System.out.println("Verify: " + toVerify);
 		System.out.println(result);
 		if (cryptoUtils.verifySignature(notaryId, toVerify, signature)) {
-			System.out.println("Updating value");
-			System.out.println(result);
 
 			answers.compute(result, (key, value) -> {
 				if (value == null) {
@@ -641,7 +659,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			for (Result resultAux : answers.keySet()) {
 				if (answers.get(resultAux) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
 					awaitSignal.countDown();
-					System.out.println("Unblocking thread");
 				}
 			}
 		}

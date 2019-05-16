@@ -1,23 +1,23 @@
 package pt.ulisboa.tecnico.hdsnotary.library;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.security.InvalidKeyException;
 import java.security.KeyStore;
+import java.security.KeyStore.PrivateKeyEntry;
 import java.security.KeyStoreException;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
-import java.sql.Timestamp;
 import java.security.UnrecoverableEntryException;
-import java.security.KeyStore.PrivateKeyEntry;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Scanner;
 
@@ -107,7 +107,6 @@ public class CryptoUtilities {
 			rsaForSign.update(msg.getBytes(Charset.forName("UTF-8")));
 			return rsaForSign.sign();
 		} catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 			return null;
 		}

@@ -111,10 +111,12 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	private CountDownLatch deliveredSignal;
 
-	public static NotaryImpl getInstance(boolean useCC, String id) throws KeyStoreException {
+	private boolean byzantine;
+
+	public static NotaryImpl getInstance(boolean useCC, String id, boolean byzantine) throws KeyStoreException {
 		if (instance == null) {
 			try {
-				instance = new NotaryImpl(useCC, id);
+				instance = new NotaryImpl(useCC, id, byzantine);
 			} catch (RemoteException e) {
 				e.printStackTrace();
 				System.exit(1);
@@ -123,11 +125,16 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return instance;
 	}
 
-	private NotaryImpl(boolean cc, String id) throws RemoteException, KeyStoreException {
+	private NotaryImpl(boolean cc, String id, boolean byzantine) throws RemoteException, KeyStoreException {
 		super();
 		populateList();
 		this.useCC = cc;
 		this.id = id;
+		this.byzantine= byzantine;
+
+		if (byzantine) {
+			System.out.println("Byzantine server");
+		}
 
 		this.keysPath = "Server/storage/" + id + ".p12";
 		this.TRANSACTIONSPATH = new String[]{"Server/storage/transactions" + id + "Backup.log",
@@ -248,8 +255,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 		Good good;
 
-		// TODO Change!
-
 		// user owns good, good is not already for sale and timestamp is recent
 		if ((good = goodsList.get(goodId)) != null && good.getUserId().equals(userId)
 			&& !good.forSale() && writeTimeStamp > good.getWriteTimestamp()) {
@@ -268,13 +273,15 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			System.out.println("Result: TRUE\n-------------------------------\n");
 
 			//send signed result
-			Result result = new Result(good.getUserId(), new Boolean(true),
-				writeTimeStamp,
+			// if demo is Byzantine Server, return false and random time stamp
+			Result result = new Result(good.getUserId(), byzantine ? new Boolean(false) : new Boolean(true),
+				(byzantine && this.id.equals("Notary2")) ? 5000 : writeTimeStamp,
 				cryptoUtils.signMessage(data + new Boolean(true).hashCode()));
 
 			System.out.println("Listening: " + good.getListening().size());
 
 			Map<String, Integer> listening = good.getListening();
+
 			for (String listener : listening.keySet()) {
 				System.out.println("###################################");
 				System.out.println("Updating value " + listener);
@@ -336,8 +343,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			Boolean status = good.forSale();
 			System.out.println("Owner: " + good.getUserId() + "\nFor Sale: " + status);
 			System.out.println("---------------------------\n");
-			// TODO change result
-			return new Result(good.getUserId(), status, good.getWriteTimestamp(), readID,
+			return new Result(good.getUserId(), status, good.getWriteTimestamp(), byzantine ? 20000: readID,
 				cryptoUtils.signMessage(data + status.hashCode()));
 		}
 		System.out.println("ERROR getting state of good");
@@ -345,7 +351,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		System.out.println("Signature verification: " + cryptoUtils
 			.verifySignature(userId, data, signature));
 		System.out.println("---------------------------\n");
-		// TODO change result
 		throw new StateOfGoodException(goodId);
 	}
 
@@ -430,7 +435,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	@Override
-	public synchronized void confirmRead(String id, String goodId, int readID, String cnonce,
+	public void confirmRead(String id, String goodId, int readID, String cnonce,
 		byte[] signMessage)
 		throws RemoteException {
 		Good good;
@@ -712,7 +717,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	}
 
 	// Returns the n-th certificate, starting from 0
-	private synchronized static byte[] getCertificateInBytes(int n) {
+	private static byte[] getCertificateInBytes(int n) {
 		byte[] certificate_bytes = null;
 		try {
 			PTEID_Certif[] certs = pteid.GetCertificates();
@@ -726,7 +731,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		return certificate_bytes;
 	}
 
-	public synchronized static X509Certificate getCertFromByteArray(byte[] certificateEncoded)
+	public static X509Certificate getCertFromByteArray(byte[] certificateEncoded)
 		throws CertificateException {
 		CertificateFactory f = CertificateFactory.getInstance("X.509");
 		InputStream in = new ByteArrayInputStream(certificateEncoded);
@@ -743,14 +748,13 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	public synchronized X509Certificate connectToNotary(String userId, String cnounce,
 		X509Certificate userCert, byte[] signature)
 		throws RemoteException, InvalidSignatureException {
-		// TODO verify certificate signature
 		cryptoUtils.addCertToList(userId, userCert);
 
 		return cryptoUtils.getStoredCert();
 
 	}
 
-	private synchronized void lookupUser(String userId) {
+	private void lookupUser(String userId) {
 		UserInterface user = null;
 		try {
 			user = (UserInterface) Naming.lookup("//localhost:3000/" + userId);
@@ -766,7 +770,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 
 	@Override
-	public synchronized Result getGoodsFromUser(String userId, String cnonce, byte[] signature)
+	public Result getGoodsFromUser(String userId, String cnonce, byte[] signature)
 		throws RemoteException, InvalidSignatureException {
 		//verify sender
 		String toVerify = nonceList.get(userId) + cnonce + userId;
@@ -788,7 +792,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 //---------------------------- Double Echo Broadcast functions ----------------------------------
 
-	public synchronized boolean broadcastMessage(String goodId, Boolean forSale, String writerId,
+	public boolean broadcastMessage(String goodId, Boolean forSale, String writerId,
 		String newOwner,
 		int timeStamp) {
 		BroadcastMessage message = new BroadcastMessage(goodId, forSale, writerId, newOwner,

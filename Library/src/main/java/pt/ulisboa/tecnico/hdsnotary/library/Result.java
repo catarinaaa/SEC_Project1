@@ -46,7 +46,6 @@ public class Result implements Serializable {
     }
 
     public Result(Object content, byte[] signature) {
-        // TODO delete
         super();
         this.userId = null;
         this.content = content;

@@ -9,9 +9,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.security.KeyStoreException;
 import java.util.Scanner;
-import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-
 import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
 import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
 
@@ -25,6 +23,13 @@ public class Client {
 
 		Scanner scanner = new Scanner(System.in);
 		System.out.println("************* WELCOME *************");
+
+		int demo = 1;
+
+		if(args.length == 2) {
+			demo = Integer.parseInt(args[1]);
+		}
+		System.out.println("Demo " + demo);
 
 		User user = null;
 		String name = "";
@@ -51,15 +56,15 @@ public class Client {
 				}
 				switch ((args.length > 0) ? Integer.parseInt(args[0]) : scanner.nextInt()) {
 					case 1:
-						user = new User("Alice", notaries, false);
+						user = new User("Alice", notaries, false, demo);
 						name = "Alice";
 						break;
 					case 2:
-						user = new User("Bob", notaries, false);
+						user = new User("Bob", notaries, false, demo);
 						name = "Bob";
 						break;
 					case 3:
-						user = new User("Charlie", notaries, false);
+						user = new User("Charlie", notaries, false, demo);
 						name = "Charlie";
 						break;
 					default:

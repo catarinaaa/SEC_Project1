@@ -1,10 +1,9 @@
 package pt.ulisboa.tecnico.hdsnotary.library;
 
 import java.io.Serializable;
-import java.security.Signature;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Good implements Serializable {
     private String userId;
@@ -19,7 +18,7 @@ public class Good implements Serializable {
         this.goodId = goodId;
         this.forSale = false;
         this.writeTimestamp = 0;
-        this.listening = new HashMap<>();
+        this.listening = new ConcurrentHashMap<>();
     }
 
     public String getUserId() {
@@ -77,8 +76,7 @@ public class Good implements Serializable {
     }
 
     public boolean removeListener(String id, int readId) {
-        if (listening.get(id) == readId) {
-            listening.remove(id);
+        if(listening.remove(id) != null) {
             return true;
         }
         return false;

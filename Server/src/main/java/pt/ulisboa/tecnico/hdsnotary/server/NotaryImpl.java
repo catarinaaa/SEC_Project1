@@ -284,19 +284,19 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				}
 
 				user = usersList.get(listener);
-				System.out.println("OK1");
+				//System.out.println("OK1");
 				String nonce = user.getNonce(this.id, cryptoUtils.signMessage(this.id));
-				System.out.println("OK2");
+				//System.out.println("OK2");
 				String cnonceAux = cryptoUtils.generateCNonce();
-				System.out.println("OK3");
+				//System.out.println("OK3");
 				Result tmpResult = new Result(good.getUserId(), new Boolean(true),
 					good.getWriteTimestamp(),
 					listening.get(listener), cryptoUtils.signMessage(""));
 				String dataAux = nonce + cnonceAux + this.id + tmpResult.hashCode();
-				System.out.println("OK4 - " + dataAux);
+				//System.out.println("OK4 - " + dataAux);
 				System.out.println(tmpResult);
 				user.updateValue(this.id, tmpResult, cnonceAux, cryptoUtils.signMessage(dataAux));
-				System.out.println("OK5");
+				//System.out.println("OK5");
 
 			}
 
@@ -401,7 +401,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			throw new TransferException("ERROR: ");
 		}
 
-		System.out.println("OK4");
+		//System.out.println("OK4");
 
 		//process transfer, updates good and database
 		good.setUserId(buyerId);
@@ -414,7 +414,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		// Sign transfer with Cartao Do Cidadao
 		try {
 			String toSign = transferId + buyerId + sellerId + goodId;
-			System.out.println("Verify: " + toSign);
+			
 			Transfer transfer = new Transfer(transferId++, buyerId, sellerId, good,
 				useCC ? signWithCC(toSign) : cryptoUtils.signMessage(toSign));
 			System.out.println("Result: TRUE\n---------------------------");
@@ -827,6 +827,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			}
 		});
 
+		System.out.println("SENDING ECHOS TO OTHER NOTARIES");
 		for (String notaryID : notariesIDs) {
 			if (notaryID.equals(this.id)) {
 				continue;
@@ -837,7 +838,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			}
 
 			NotaryInterface notary = remoteNotaries.get(notaryID);
-			System.out.println("SENDING ECHO");
 			service.execute(() -> {
 				try {
 					notary.echoBroadcast(message, this.id);
@@ -850,7 +850,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	@Override
 	public void echoBroadcast(BroadcastMessage message, String serverID) throws RemoteException {
-		System.out.println(this.id + " ECHO BROADCAST FROM " + serverID);
+		System.out.println("           RECEIVED ECHO BROADCAST FROM " + serverID);
 
 		echoServers.compute(message, (key, value) -> {
 			if(value == null)
@@ -870,7 +870,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	@Override
 	public void readyBroadcast(BroadcastMessage message, String serverID) throws RemoteException {
-		System.out.println(this.id + " READY BROADCAST FROM " + serverID);
+		System.out.println("RECEIVED READY BROADCAST FROM " + serverID);
 
 		readyServers.compute(message, (key, value) -> {
 			if(value == null)
@@ -895,6 +895,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private void triggerSendReady(BroadcastMessage message) {
 		sentReady.replace(message, false, true);
 
+		System.out.println("SENDING READY TO NOTARIES");
 		for (String notaryID : notariesIDs) {
 			NotaryInterface notary;
 			if (notaryID.equals(this.id)) {
@@ -906,7 +907,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				}
 				notary = remoteNotaries.get(notaryID);
 			}
-			System.out.println("SENDING READY");
 			service.execute(() -> {
 				try {
 					notary.readyBroadcast(message, this.id);

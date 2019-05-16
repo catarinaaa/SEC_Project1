@@ -554,7 +554,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 					}
 
 					if (answers.get(result) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
-						System.out.println("Sending signal " + answers.get(result));
+						//System.out.println("Sending signal " + answers.get(result));
 						awaitSignal.countDown();
 					}
 
@@ -581,7 +581,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		}
 
 		Result result = null;
-		System.out.println("Size: " + answers.keySet().size());
+		
 		for (Result resultAux : answers.keySet()) {
 			if (answers.get(resultAux) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
 				result = resultAux;
@@ -591,8 +591,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		if (result == null) {
 			System.err.println("ERROR ERROR ERROR ERROR");
 		} else {
-			System.out.println("Quorum Reached");
-			System.out.println("Result: " + result);
+			if (answers.keySet().size() == 1)
+				System.out.println("All answers match. Quorum Reached!");
+			else {
+				System.out.println("Quorum Reached (one notary failed)");
+				System.out.println("Result: " + result);
+			}
 			System.out
 				.println("Owner: " + result.getUserId() + " For Sale: " + result.getContent());
 		}

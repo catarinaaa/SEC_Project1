@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsnotary.client;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
@@ -17,6 +18,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
+
 import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
 import pt.ulisboa.tecnico.hdsnotary.library.Good;
 import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
@@ -31,7 +34,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 	private static final long serialVersionUID = 1L;
 
-	private static final long TIMEOUT = 15;
+	private static final long TIMEOUT = 5;
 	private static final int NUM_NOTARIES = 4;
 	private static final int NUM_FAULTS = 1;
 
@@ -239,13 +242,12 @@ public class User extends UnicastRemoteObject implements UserInterface {
 					MessageDigest md = MessageDigest.getInstance("SHA-256");
 					String hashed = "";
 					String data = "";
-//                    while (!Pattern.matches("000.*", hashed)) {
-//                        nonceToNotary = ((new BigInteger(nonceToNotary)).add(BigInteger.ONE)).toString();
-//                        data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
-//                        byte[] messageDigest = md.digest(data.getBytes());
-//                        hashed = cryptoUtils.byteArrayToHex(messageDigest);
-//                    }
-					data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
+                    while (!Pattern.matches("000.*", hashed)) {
+                        nonceToNotary = ((new BigInteger(nonceToNotary)).add(BigInteger.ONE)).toString();
+                        data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
+                        byte[] messageDigest = md.digest(data.getBytes());
+                        hashed = cryptoUtils.byteArrayToHex(messageDigest);
+                    }
 					
 					if (verbose)
 						System.out.println("--> hash generated: " + nonceToNotary);
@@ -311,7 +313,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			if (verbose) {
 				System.out.println("--> Removing good " + goodId + " from my list");
 			}
-			notaryRecover();
+			//notaryRecover();
 			if (acksList.size() > failedAcksList.size()) {
 				goods.remove(goodId);
 				return (Result) acksList.values().toArray()[0];
@@ -480,14 +482,13 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				System.out.println("--> AcksList: " + acksList.size());
 			}
 			System.out.println("--> Quorum Reached");
-			notaryRecover();
+			//notaryRecover();
 			if (acksList.size() > failedAcksList.size()) {
 				goods.get(goodId).setForSale();
 				goodToSell.setWriteTimestamp(writeTimeStamp);
 				System.out.println("Result: TRUE\n------------------");
 				if (failedAcksList.size()!= 0) {
 					System.out.println("Ocorreram problemas, tentando recuperar!");
-					notaryRecover();
 				}
 			} else {
 				System.out.println("Result: FALSE\n------------------");
@@ -524,7 +525,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		readID++;
 
 		AtomicInteger exceptions = new AtomicInteger(0);
-		notaryRecover();
 		for (String notaryID : notaryServers.keySet()) {
 			NotaryInterface notary = notaryServers.get(notaryID);
 
@@ -546,12 +546,10 @@ public class User extends UnicastRemoteObject implements UserInterface {
 							result.getSignature()) && result.getReadID() == readID) {
 						throw new InvalidSignatureException(notaryID);
 					}
-
-					int count = answers.containsKey(result) ? answers.get(result) + 1 : 1;
-//                    System.out.println("Number of times: " + count);
-					System.out.println("Count: " + count);
-					System.out.println(result);
-					answers.put(result, count);
+					
+					
+					answers.put(result, answers.containsKey(result) ? answers.get(result) + 1 : 1);
+					System.out.println("LISTINHA ---> " + answers);
 
 //                    System.out.println("Size thread: " + answers.keySet().size());
 //                        System.out.println("Contains: " + answers.containsKey(result));

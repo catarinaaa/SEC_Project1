@@ -41,6 +41,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.FileHandler;
+import java.util.regex.Pattern;
 
 import pt.gov.cartaodecidadao.PteidException;
 import pt.ulisboa.tecnico.hdsnotary.library.BroadcastMessage;
@@ -81,16 +82,16 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private static NotaryImpl instance = null;
 
 	private String[] notariesIDs = new String[]{"Notary1", "Notary2", "Notary3", "Notary4"};
-	private Map<String, NotaryInterface> remoteNotaries = new HashMap<>();
+	private ConcurrentHashMap<String, NotaryInterface> remoteNotaries = new ConcurrentHashMap<>();
 
 	// List containing all goods
-	private Map<String, Good> goodsList = new HashMap<>();
+	private ConcurrentHashMap<String, Good> goodsList = new ConcurrentHashMap<>();
 
 	// List containing nonces for security
-	private Map<String, String> nonceList = new HashMap<>();
+	private ConcurrentHashMap<String, String> nonceList = new ConcurrentHashMap<>();
 
 	// List of users
-	private Map<String, UserInterface> usersList = new HashMap<>();
+	private ConcurrentHashMap<String, UserInterface> usersList = new ConcurrentHashMap<>();
 
 	private File transactionsFile = null;
 	private File sellingListFile = null;
@@ -138,10 +139,10 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		this.id = id;
 
 		this.keysPath = "Server/storage/" + id + ".p12";
-		this.TRANSACTIONSPATH = new String[]{"Server/storage/transactions" + id + "Backup.txt",
-			"Server/storage/transactions" + id + ".txt"};
-		this.SELLINGLISTPATH = new String[]{"Server/storage/selling" + id + "Backup.txt",
-			"Server/storage/selling" + id + ".txt"};
+		this.TRANSACTIONSPATH = new String[]{"Server/storage/transactions" + id + "Backup.log",
+			"Server/storage/transactions" + id + ".log"};
+		this.SELLINGLISTPATH = new String[]{"Server/storage/selling" + id + "Backup.log",
+			"Server/storage/selling" + id + ".log"};
 		this.TEMPFILE = "Server/storage/temp" + id + ".txt";
 
 		cryptoUtils = new CryptoUtilities(this.id, keysPath, this.id);
@@ -390,16 +391,16 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		} catch (NoSuchAlgorithmException e1) {
 		}
 		byte[] messageDigest = md.digest(data.getBytes());
-//        if (!Pattern.matches("000.*", cryptoUtils.byteArrayToHex(messageDigest))) {
-//            System.out.println("Result: NO\n---------------------------");
-//            throw new TransferException("ERROR: anti-spam mechanism failed");
-//        }
+        if (!Pattern.matches("000.*", cryptoUtils.byteArrayToHex(messageDigest))) {
+            System.out.println("Result: NO\n---------------------------");
+            throw new TransferException("ERROR: anti-spam mechanism failed");
+        }
 		Good good;
 
 		// Broadcast message
-		if (!broadcastMessage(goodId, false, sellerId, "", writeTimestamp)) {
-			throw new TransferException("ERROR broadcasting message");
-		}
+//		if (!broadcastMessage(goodId, false, sellerId, "", writeTimestamp)) {
+//			throw new TransferException("ERROR broadcasting message");
+//		}
 
 		// verifies if the good exists, if the good is owned by the seller and if it is for sale,
 		// write timestamp is recent and anti-spam mechanism matches
@@ -956,15 +957,15 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 
 	@Override
 	public void recoverErrors() throws IOException {
-		System.out.println("FIXING ERROR SELLING LIST!");
+		//maroscas para os logs sincronizarem entre eles
 		Path myPath = Paths.get(SELLINGLISTPATH[1]);
 		FileTime myTime = Files.getLastModifiedTime(myPath);
 		System.out.println("My time -> " + myTime);
 		
-		//Estou a fazer batota para este path funcionar
+		//Estou a fazer batota para ir buscar este path diretamente
 		int myId = this.id.charAt(this.id.length() - 1);
 		int nextId = (myId % 4) + 1;
-		Path otherPath = Paths.get("Server/storage/sellingNotary" + nextId + ".txt");
+		Path otherPath = Paths.get("Server/storage/sellingNotary" + nextId + ".log");
 		FileTime nextTime = Files.getLastModifiedTime(otherPath);
 		System.out.println("Time of next notary -> " + nextTime);
 		
@@ -976,15 +977,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 		
 		recoverSellingList();
 		
-		//######
+		
 		//recuperar transactions
-		System.out.println("FIXING ERROR TRANSACTION LIST!");
 		myPath = Paths.get(TRANSACTIONSPATH[1]);
 		myTime = Files.getLastModifiedTime(myPath);
 		System.out.println("My time -> " + myTime);
 		
-		//Estou a fazer batota para este path funcionar
-		otherPath = Paths.get("Server/storage/transactionsNotary" + nextId + ".txt");
+		//Estou a fazer batota para ir buscar este path diretamente
+		otherPath = Paths.get("Server/storage/transactionsNotary" + nextId + ".log");
 		nextTime = Files.getLastModifiedTime(otherPath);
 		System.out.println("Time of next notary -> " + nextTime);
 		

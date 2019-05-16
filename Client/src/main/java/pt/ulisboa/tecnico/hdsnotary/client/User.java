@@ -358,7 +358,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			result = remoteUsers.get(seller)
 				.transferGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
 
-			//TODO verify sign
 
 			goods.put(goodId, ((Transfer) result.getContent()).getGood());
 			if (verbose) {

@@ -65,8 +65,9 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 	private final String TEMPFILE;
 	private final Boolean verbose = false;
 
-	private static final int NUM_NOTARIES = 4;
+	
 	private static final int NUM_FAULTS = 1;
+	private static final int NUM_NOTARIES = NUM_FAULTS*4;
 
 	// Singleton
 	private static NotaryImpl instance = null;

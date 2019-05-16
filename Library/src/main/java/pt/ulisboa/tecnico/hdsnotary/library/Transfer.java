@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsnotary.library;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 public class Transfer implements Serializable {
 	
@@ -45,4 +46,10 @@ public class Transfer implements Serializable {
 			return false;
         return (buyerId.equals(r.getBuyerId()) && sellerId.equals(r.getSellerId()));
 	}
+	
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.id, this.buyerId, this.sellerId, this.good);
+    }
+	
 }

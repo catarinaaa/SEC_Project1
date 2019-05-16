@@ -97,7 +97,7 @@ public class UserMan extends UnicastRemoteObject implements UserInterface {
 	}
 
 	@Override
-	public Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
+	public Result transferGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
 		try {
 			String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
 
@@ -126,7 +126,7 @@ public class UserMan extends UnicastRemoteObject implements UserInterface {
 		}
 		catch(IOException e) {
 			rebind();
-			return buyGood(userId, goodId, cnonce, signature);
+			return transferGood(userId, goodId, cnonce, signature);
 		}
 	}
 
@@ -153,14 +153,14 @@ public class UserMan extends UnicastRemoteObject implements UserInterface {
 					String cnonce = cryptoUtils.generateCNonce();
 					nonceList.put(user2, cnonce);
 					String toSign = nonce + cnonce + this.id + goodId;
-					result = remoteUser2.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
+					result = remoteUser2.transferGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
 				}
 				else if(seller.equals(user3) && remoteUser3 != null) {
 					String nonce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
 					String cnonce = cryptoUtils.generateCNonce();
 					nonceList.put(user3, cnonce);
 					String toSign = nonce + cnonce + this.id + goodId;
-					result = remoteUser3.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
+					result = remoteUser3.transferGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
 				}
 
 

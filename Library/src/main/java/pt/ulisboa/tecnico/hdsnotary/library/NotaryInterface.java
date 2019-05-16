@@ -9,16 +9,16 @@ public interface NotaryInterface extends Remote {
 
     String getNonce(String userId) throws RemoteException;
 
-    Result intentionToSell(String userId, String goodId, int writeTimeStamp, String cnonce, byte[] writeSignature, byte[] signature)
-            throws RemoteException;
+    Result intentionToSell(String userId, String goodId, int writeTimeStamp, String cnonce, byte[] signature)
+            throws RemoteException, InvalidSignatureException;
 
     Result stateOfGood(String userId, int readID, String cnonce, String goodId, byte[] signature)
-            throws RemoteException, StateOfGoodException;
+            throws RemoteException, StateOfGoodException, InvalidSignatureException;
 
     Transfer transferGood(String sellerId, String buyerId, String goodId, int writeTimeStamp,
-		String cnonce,
-		byte[] writeSignature, byte[] signature)
-            throws RemoteException, IOException, TransferException;
+                          String cnonce,
+                          byte[] signature)
+            throws RemoteException, IOException, TransferException, InvalidSignatureException;
 
     X509Certificate getCertificateCC() throws RemoteException;
 
@@ -27,4 +27,11 @@ public interface NotaryInterface extends Remote {
 
     Result getGoodsFromUser(String userId, String cnonce, byte[] signature)
             throws RemoteException, InvalidSignatureException;
+
+    void confirmRead(String id, String goodId, int readID, String cnonce, byte[] signMessage) throws RemoteException;
+
+    void echoBroadcast(BroadcastMessage message, String serverID) throws RemoteException;
+
+    void readyBroadcast(BroadcastMessage message, String serverID) throws RemoteException;
+
 }

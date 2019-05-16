@@ -2,6 +2,7 @@ package pt.ulisboa.tecnico.hdsnotary.library;
 
 
 import java.io.Serializable;
+import java.util.Objects;
 
 public class Result implements Serializable {
 
@@ -15,18 +16,15 @@ public class Result implements Serializable {
     private final byte[] signature;
     private final int writeTimestamp;
     private final int readID;
-    private final byte[] writeSignature;
-    private final String writerId;
 
-    public Result(String userId, Object content, int writeTimestamp, int readID, String writerId, byte[] writeSignature, byte[] signature) {
+    // StateOfGood
+    public Result(String userId, Object content, int writeTimestamp, int readID, byte[] signature) {
         super();
         this.userId = userId;
         this.content = content;
         this.signature = signature;
         this.writeTimestamp = writeTimestamp;
         this.readID = readID;
-        this.writerId = writerId;
-        this.writeSignature = writeSignature;
     }
 
     public Result(String userId, Object content, int writeTimestamp, byte[] signature) {
@@ -36,8 +34,6 @@ public class Result implements Serializable {
         this.signature = signature;
         this.writeTimestamp = writeTimestamp;
         this.readID = -1;
-        this.writeSignature = null;
-        this.writerId = null;
     }
 
     public Result(Object content, int writeTimestamp, byte[] signature) {
@@ -47,20 +43,15 @@ public class Result implements Serializable {
         this.signature = signature;
         this.writeTimestamp = writeTimestamp;
         this.readID = -1;
-        this.writeSignature = null;
-        this.writerId = null;
     }
 
     public Result(Object content, byte[] signature) {
-        // TODO delete
         super();
         this.userId = null;
         this.content = content;
         this.signature = signature;
         this.writeTimestamp = -1;
         this.readID = -1;
-        this.writeSignature = null;
-        this.writerId = null;
     }
 
     public Object getContent() {
@@ -83,14 +74,6 @@ public class Result implements Serializable {
         return readID;
     }
 
-    public String getWriterId() {
-        return writerId;
-    }
-
-    public byte[] getWriteSignature() {
-        return writeSignature;
-    }
-
     @Override
     public boolean equals(Object o) {
         Result r = (Result) o;
@@ -99,6 +82,21 @@ public class Result implements Serializable {
             return false;
         }
         return (userId.equals(r.getUserId()) && content.equals(r.getContent())
-                && writeTimestamp == r.writeTimestamp);
+                && writeTimestamp == r.writeTimestamp && readID == r.getReadID());
     }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.userId, this.content, this.writeTimestamp, this.readID);
+    }
+
+	@Override
+	public String toString() {
+		return "Result{" +
+			"content=" + content +
+			", userId='" + userId + '\'' +
+			", writeTimestamp=" + writeTimestamp +
+			", readID=" + readID +
+			'}';
+	}
 }

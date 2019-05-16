@@ -1,16 +1,16 @@
 package pt.ulisboa.tecnico.hdsnotary.library;
 
 import java.io.Serializable;
-import java.security.Signature;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Good implements Serializable {
     private String userId;
     private String goodId;
     private Boolean forSale;
     private int writeTimestamp;
-    private byte[] signature;
-    private String writerId;
+    private Map<String, Integer> listening;
 
     public Good(String userId, String goodId) {
         super();
@@ -18,8 +18,7 @@ public class Good implements Serializable {
         this.goodId = goodId;
         this.forSale = false;
         this.writeTimestamp = 0;
-        this.signature = null;
-        this.writerId = null;
+        this.listening = new ConcurrentHashMap<>();
     }
 
     public String getUserId() {
@@ -58,20 +57,12 @@ public class Good implements Serializable {
         this.writeTimestamp = writeTimestamp;
     }
 
-    public byte[] getSignature() {
-        return signature;
+    public Map<String, Integer> getListening() {
+        return listening;
     }
 
-    public void setSignature(byte[] signature) {
-        this.signature = signature;
-    }
-
-    public String getWriterId() {
-        return writerId;
-    }
-
-    public void setWriterId(String writerId) {
-        this.writerId = writerId;
+    public void setListener(String id, int readId) {
+        listening.put(id, readId);
     }
 
     @Override
@@ -82,5 +73,12 @@ public class Good implements Serializable {
     @Override
     public int hashCode() {
         return Objects.hash(goodId, userId, forSale, writeTimestamp);
+    }
+
+    public boolean removeListener(String id, int readId) {
+        if(listening.remove(id) != null) {
+            return true;
+        }
+        return false;
     }
 }

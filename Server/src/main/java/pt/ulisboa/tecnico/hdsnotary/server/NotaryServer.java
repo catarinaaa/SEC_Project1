@@ -1,6 +1,5 @@
 package pt.ulisboa.tecnico.hdsnotary.server;
 
-import java.rmi.Naming;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 
@@ -13,10 +12,17 @@ public class NotaryServer {
 		boolean useCC;
 		String id;
 		boolean verbose = false;
+		boolean byzantine = false;
 		
-		if(args.length == 3)
-			verbose = Boolean.parseBoolean(args[2]);
-		if(args.length == 2) {
+			
+		if(args.length >= 2 && args.length <= 4) {
+			if (args.length == 3)
+				verbose = Boolean.parseBoolean(args[2]);
+			else if(args.length == 4) {
+				verbose = Boolean.parseBoolean(args[2]);
+				byzantine = Boolean.parseBoolean(args[3]);
+			}
+
 			id = args[0];
 			useCC = Boolean.parseBoolean(args[1]);
 		}
@@ -27,7 +33,7 @@ public class NotaryServer {
 
 
 		try {
-			NotaryImpl obj = NotaryImpl.getInstance(useCC, id);
+			NotaryImpl obj = NotaryImpl.getInstance(useCC, id, byzantine);
 
 			reg = LocateRegistry.getRegistry(port);
 			reg.rebind(id, obj);
@@ -46,7 +52,7 @@ public class NotaryServer {
 			
 			System.in.read();
 			obj.stop();
-			Naming.unbind("//localhost:3000/" + obj.getId());
+			reg.unbind(id);
 			System.out.println("Server terminated");
 			System.exit(0);
 

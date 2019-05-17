@@ -8,10 +8,11 @@ Tiago Almeida 83568
 
 
 ## Instructions
-Below there are 5 different executions, one with normal execution and 3 with simulation of possible byzantine erros
+Below there are 4 different executions, 1 with normal execution and 3 with simulation of possible byzantine erros
 7 terminals should be open for executing the tests and the following commands should be introduced.
+To run the Notaries using the citizen card for authentication, change the 2nd argument to true.
 
-Please, run ./clean.sh to clean all databases before runninng every test
+Please, run ./clean.sh followed by ./compile.sh to clean all databases before runninng every demo.
 
 Demo 1 - Normal Run
 ./runRMIRegistry.sh

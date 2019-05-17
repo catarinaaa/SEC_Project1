@@ -34,11 +34,9 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	private static final long serialVersionUID = 1L;
 
 	private static final long TIMEOUT = 5;
-	private static final int NUM_NOTARIES = 4;
 	private static final int NUM_FAULTS = 1;
+	private static final int NUM_NOTARIES = (3*NUM_FAULTS)+1;
 
-	private static final String[] NOTARY_LIST = new String[]{"Notary1", "Notary2", "Notary3",
-		"Notary4"};
 	private static final String NOTARY_CC = "CertCC";
 
 	private final String id;
@@ -91,17 +89,14 @@ public class User extends UnicastRemoteObject implements UserInterface {
 
 		//System.out.println("Initializing user " + id);
 
-		if (verbose) {
-			System.out.println("1");
-		}
+		if (verbose)
+			System.out.println("Connecting to notary");
 		connectToNotary();
-		if (verbose) {
-			System.out.println("2");
-		}
+		if (verbose)
+			System.out.println("Getting my goods from notary");
 		getGoodFromUser();
-		if (verbose) {
-			System.out.println("3");
-		}
+		if (verbose)
+			System.out.println("Connecting to users");
 		connectToUsers();
 
 	}
@@ -126,7 +121,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	 * Function to change certificates with notary
 	 */
 	private void connectToNotary() throws RemoteException, InvalidSignatureException {
-		// TODO verify signatures
 		for (String notaryID : notaryServers.keySet()) {
 			NotaryInterface notary = notaryServers.get(notaryID);
 
@@ -153,21 +147,18 @@ public class User extends UnicastRemoteObject implements UserInterface {
 			String cnonce = cryptoUtils.generateCNonce();
 			String toSign = notary.getNonce(this.id) + cnonce + this.id;
 			Result res = null;
-			//System.out.println("g1");
 
 			try {
 				res = notary.getGoodsFromUser(this.id, cnonce, cryptoUtils.signMessage(toSign));
 			} catch (InvalidSignatureException e) {
 				System.err.println(e.getMessage());
 			}
-			//System.out.println("g2");
 
 			//verify received message
 			String toVerify = toSign + res.getContent().hashCode();
 			if (!cryptoUtils.verifySignature(notaryID, toVerify, res.getSignature())) {
 				System.err.println("ERROR: Signature could not be verified");
 			}
-			//System.out.println("g3");
 
 			map = (ConcurrentHashMap<String, Good>) res.getContent();
 
@@ -506,9 +497,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				goods.get(goodId).setForSale();
 				goodToSell.setWriteTimestamp(writeTimeStamp);
 				System.out.println("Result: TRUE\n------------------");
-				if (failedAcksList.size() != 0) {
-					System.out.println("Ocorreram problemas, tentando recuperar!");
-				}
 			} else {
 				System.out.println("Result: FALSE\n------------------");
 			}
@@ -564,8 +552,6 @@ public class User extends UnicastRemoteObject implements UserInterface {
 						}
 					});
 
-//					System.out.println("LISTINHA ---> " + answers);
-
 
 					if (verbose) {
 						System.out.println("Owner: " + result.getUserId());
@@ -609,7 +595,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		}
 
 		if (result == null) {
-			System.err.println("ERROR ERROR ERROR ERROR");
+			System.err.println("ERROR -> Result is null");
 		} else {
 			if (answers.keySet().size() == 1 && answers.get(result) == 4)
 				System.out.println("All answers match. Quorum Reached!");
@@ -631,7 +617,7 @@ public class User extends UnicastRemoteObject implements UserInterface {
 				notary.confirmRead(this.id, goodId, this.readID, cnonce,
 					cryptoUtils.signMessage(data));
 			} catch (RemoteException e) {
-				e.printStackTrace();
+				rebind();
 				System.err.println("ERROR: Could not confirm read");
 			}
 

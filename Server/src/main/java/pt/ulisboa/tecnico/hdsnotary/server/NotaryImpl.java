@@ -292,19 +292,14 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 				}
 
 				user = usersList.get(listener);
-				//System.out.println("OK1");
 				String nonce = user.getNonce(this.id, cryptoUtils.signMessage(this.id));
-				//System.out.println("OK2");
 				String cnonceAux = cryptoUtils.generateCNonce();
-				//System.out.println("OK3");
 				Result tmpResult = new Result(good.getUserId(), new Boolean(true),
 					good.getWriteTimestamp(),
 					listening.get(listener), cryptoUtils.signMessage(""));
 				String dataAux = nonce + cnonceAux + this.id + tmpResult.hashCode();
-				//System.out.println("OK4 - " + dataAux);
 				System.out.println(tmpResult);
 				user.updateValue(this.id, tmpResult, cnonceAux, cryptoUtils.signMessage(dataAux));
-				//System.out.println("OK5");
 
 			}
 
@@ -406,8 +401,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			printGoods();
 			throw new TransferException("ERROR: ");
 		}
-
-		//System.out.println("OK4");
 
 		//process transfer, updates good and database
 		good.setUserId(buyerId);
@@ -890,6 +883,7 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			triggerSendReady(message);
 
 		} else if (readyServers.get(message).size() > 2 * NUM_FAULTS && !delivered.get(message)) {
+			//Quorum reached
 			delivered.replace(message, false, true);
 			deliveredSignal.countDown();
 		}
@@ -906,7 +900,6 @@ public class NotaryImpl extends UnicastRemoteObject implements NotaryInterface, 
 			if (notaryID.equals(this.id)) {
 				notary = this;
 			} else {
-				// manhoso
 				if (!remoteNotaries.containsKey(notaryID)) {
 					locateNotaries();
 				}

@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsnotary.client;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -8,12 +9,14 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.security.KeyStoreException;
 import java.util.Scanner;
-
+import java.util.concurrent.ConcurrentHashMap;
+import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
 import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
 
 public class Client {
-	public static void main(String args[]) {
 
+	public static void main(String args[]) {
+		
 		System.out.println("Initializing Client");
 
 		int PORT = 3000;
@@ -21,139 +24,147 @@ public class Client {
 		Scanner scanner = new Scanner(System.in);
 		System.out.println("************* WELCOME *************");
 
+		int demo = 1;
+
+		if(args.length == 2) {
+			demo = Integer.parseInt(args[1]);
+		}
+		System.out.println("Demo " + demo);
+
 		User user = null;
-        String name = "";
-        
-        Registry reg = null;
-        
+		String name = "";
+
+		Registry reg = null;
+
 		try {
+			ConcurrentHashMap<String, NotaryInterface> notaries;
+			while( (notaries = locateNotaries()) == null) {
+				System.out.println("Trying to reconnect in 3 seconds...");
+				Thread.sleep(3000);
+			}
 			
-			reg = LocateRegistry.getRegistry(PORT);
+			while (true) {
+				if (args.length == 0) {
+					System.out.println("Choose one user to create:");
+					System.out.println("1 - Alice");
+					System.out.println("2 - Bob");
+					System.out.println("3 - Charlie");
+
+					while (!scanner.hasNextInt()) {
+						scanner.next();
+					}
+				}
+				switch ((args.length > 0) ? Integer.parseInt(args[0]) : scanner.nextInt()) {
+					case 1:
+						user = new User("Alice", notaries, false, demo);
+						name = "Alice";
+						break;
+					case 2:
+						user = new User("Bob", notaries, false, demo);
+						name = "Bob";
+						break;
+					case 3:
+						user = new User("Charlie", notaries, false, demo);
+						name = "Charlie";
+						break;
+					default:
+						System.out.println("Invalid option!");
+				}
+				if(user != null) break;
+			}
+			while ((reg = bindUser(PORT, name, user)) == null) {
+				System.out.println("Trying to reconnect in 3 seconds...");
+				Thread.sleep(3000);
+			}
 			
-			for(String s : reg.list()) {
-				System.out.println("Name > " + s);
+//			for (String s : reg.list()) {
+//				System.out.println("Name > " + s);
+//			}
+			
+			Boolean exit = false;
+
+			while (!exit) {
+
+				System.out.println("\nChoose one option:");
+				System.out.println("1 - List goods owned");
+				System.out.println("2 - Sell good");
+				System.out.println("3 - Buy good");
+				System.out.println("4 - Check state of Good");
+				System.out.println("5 - Logout");
+
+				while (!scanner.hasNextInt()) {
+					scanner.next();
+				}
+
+				switch (scanner.nextInt()) {
+					case 1:
+						System.out.println("------ PRINT GOODS " + name + " ------");
+						user.listGoods();
+						break;
+					case 2:
+						System.out.println(
+							"----- INTENTION TO SELL -----\nInput good ID of good you wish to sell:");
+						String goodId = scanner.next();
+						user.intentionSell(goodId);
+						break;
+					case 3:
+						System.out
+							.println("------ BUYING -----\nInput good ID of good you wish to buy:");
+						goodId = scanner.next();
+						user.buying(goodId);
+						break;
+					case 4:
+						System.out.println(
+							"----- STATE OF GOOD -----\nInput good ID of good you wish to check state:");
+						goodId = scanner.next();
+						user.stateOfGood(goodId);
+						break;
+					case 5:
+						System.out.println("Goodbye!");
+						Naming.unbind("//localhost:3000/" + user.getId());
+						exit = true;
+						break;
+					default:
+						System.out.println("Invalid option!");
+				}
 			}
 
-            NotaryInterface notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
-
-            while (true) {
-            	if(args.length ==0) {
-	                System.out.println("Choose one user to create:");
-	                System.out.println("1 - Alice");
-	                System.out.println("2 - Bob");
-	                System.out.println("3 - Charlie");
-            	
-
-                while(!scanner.hasNextInt())
-                    scanner.next();
-            	}
-                switch ((args.length > 0) ? Integer.parseInt(args[0]) : scanner.nextInt()) {
-                    case 1:
-                        user = new User("Alice", notary, "Bob", "Charlie");
-                        name = "Alice";
-                        user.addGood("good1", false);
-                        user.addGood("good2", false);
-                        break;
-                    case 2:
-                        user = new User("Bob", notary, "Alice", "Charlie");
-                        name = "Bob";
-                        user.addGood("good3", false);
-                        user.addGood("good4", false);
-                        break;
-                    case 3:
-                        user = new User("Charlie", notary, "Alice", "Bob");
-                        name = "Charlie";
-                        user.addGood("good5", false);
-                        user.addGood("good6", false);
-                        break;
-                    default:
-                        System.out.println("Invalid option!");
-                }
-
-                if(user!= null) {
-                	reg = LocateRegistry.getRegistry(PORT);
-    	            reg.rebind(name, user);
-                	break;
-                }
-	            
-            }
-            
-            Boolean exit = true;
-            
-            while(exit) {
-
-                System.out.println("\nChoose one option:");
-                System.out.println("1 - List goods owned");
-                System.out.println("2 - Sell good");
-                System.out.println("3 - Buy good");
-                System.out.println("4 - Check state of Good");
-                System.out.println("5 - Logout");
-
-                while(!scanner.hasNextInt())
-                    scanner.next();
-
-                switch (scanner.nextInt()) {
-                    case 1:
-                    	System.out.println("------ PRINT GOODS " + name + " ------");
-                        user.listGoods();
-                        break;
-                    case 2:
-                    	System.out.println("----- INTENTION TO SELL -----\nInput good ID of good you wish to sell:");
-                    	String goodId = scanner.next();
-                    	user.intentionSell(goodId);
-                    	break;
-                    case 3:
-                    	System.out.println("------ BUYING -----\nInput good ID of good you wish to buy:");
-                    	goodId = scanner.next();
-                    	user.buying(goodId);
-                    	break;
-                    case 4:
-                    	System.out.println("----- STATE OF GOOD -----\nInput good ID of good you wish to check state:");
-                    	goodId = scanner.next();
-                    	user.stateOfGood(goodId);
-                    	break;
-                    case 5:
-                    	System.out.println("Goodbye!");
-                    	exit = false;
-                    	break;
-                    default:
-                    	System.out.println("Invalid option!");
-                }
-            }
-            
-
-//            user.intentionSell("good2");
-//            System.out.println("Transfer > " + user.buyGood("user3", "good2"));
-//
-//            user.intentionSell("good1");
-//            System.out.println("Transfer > " + user.buyGood("user4", "good1"));
-//
-//            user.intentionSell("good3");
-//            
-//            System.out.println("Testing state of good");
-//            user.stateOfGood("good2");
-//
-//            System.out.println("Client server ready!");
-//
-//            System.out.println("Awaiting connections");
-//            System.out.println("Press enter to shutdown");
-//            System.in.read();
-//            System.out.println("Client server terminated");
-//            System.exit(0);
-
-        
 		} catch (NotBoundException | IOException e) {
-            System.out.println("ERROR locating Notary\n Exiting!");
-            e.printStackTrace();
-            scanner.close();
-            return;
-	    } catch (KeyStoreException e) {
-	    	System.err.println("ERROR creating user, cryptoUtils error");
-	    	scanner.close();
-	    	return;
-	    }
-		
-		 scanner.close();
-         System.exit(0);
+			e.printStackTrace();
+			System.err.println("ERROR locating Notary servers");
+		} catch (KeyStoreException e) {
+			System.err.println("ERROR creating user, cryptoUtils error");
+		} catch (InvalidSignatureException e) {
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		} finally {
+			System.err.println("Exiting!");
+			scanner.close();
+			System.exit(0);
+		}
+	}
+
+	public static ConcurrentHashMap<String, NotaryInterface> locateNotaries() {
+		try {
+			ConcurrentHashMap<String, NotaryInterface> list = new ConcurrentHashMap<>();
+			list.put("Notary1", (NotaryInterface) Naming.lookup("//localhost:3000/Notary1"));
+			list.put("Notary2", (NotaryInterface) Naming.lookup("//localhost:3000/Notary2"));
+			list.put("Notary3", (NotaryInterface) Naming.lookup("//localhost:3000/Notary3"));
+			list.put("Notary4", (NotaryInterface) Naming.lookup("//localhost:3000/Notary4"));
+			return list;
+		} catch(NotBoundException | MalformedURLException |RemoteException e) {
+			return null;
+		} 
+	}
+	
+	public static Registry bindUser(int port, String name, User user) {
+		try {
+			Registry reg = LocateRegistry.getRegistry(port);
+			reg.rebind(name, user);
+			return reg;
+		} catch (RemoteException e) {
+			return null;
+		}
 	}
 }

@@ -8,95 +8,60 @@ Tiago Almeida 83568
 
 
 ## Instructions
-Below there are 5 different executions, one with normal execution and 4 with simulation of attacks.
-4 terminals should be open for executing the tests and the following commands should be introduced.
+Below there are 4 different executions, 1 with normal execution and 3 with simulation of possible byzantine erros
+7 terminals should be open for executing the tests and the following commands should be introduced.
+To run the Notaries using the citizen card for authentication, change the 2nd argument to true.
 
-Please, run ./clean.sh to clean all databases before runninng every test
+Please, run ./clean.sh followed by ./compile.sh to clean all databases before runninng every demo.
 
-Simple demo:
+Demo 1 - Normal Run
+./runRMIRegistry.sh
+./runServer.sh Notary1 false
+./runServer.sh Notary2 false
+./runServer.sh Notary3 false
+./runServer.sh Notary4 false
 
-Terminal 1: ./runServer.sh
-Terminal 2: ./runClient.sh 1
-Terminal 3: ./runClient.sh 2
-Terminal 4: ./runClient.sh 3
-T2: 1 [Enter]
-T2: 2 [Enter] good1 [Enter]
-T3: 1 [Enter]
-T3: 4 [Enter] good1 [Enter]
-T3: 3 [Enter] good1 [Enter]
-T2: 1 [Enter]
-T3: 1 [Enter]
+./runClient.sh 1
+./runClient.sh 2
+./runClient.sh 3
 
-******************************************************
-Replay attack demo:
 
-Terminal 1: ./runServer.sh
-Terminal 2: ./runReplayClient.sh 1
-Terminal 3: ./runClient.sh 2
-Terminal 4: ./runClient.sh 3
-T2: 1 [Enter]
-T2: 2 [Enter] good1 [Enter]
-T3: 1 [Enter]
-T3: 4 [Enter] good1 [Enter]
-T3: 3 [Enter] good1 [Enter]
-T2: 1 [Enter]
-T3: 1 [Enter]
+Demo 2 - Read and Write at the same time
+Client 2, Bob, will delay writes to some Notaries on intentionToSell every time
+./runRMIRegistry.sh
+./runServer.sh Notary1 false
+./runServer.sh Notary2 false
+./runServer.sh Notary3 false
+./runServer.sh Notary4 false
 
-In this test, Alice tries to sell the same good twice
+./runClient.sh 1
+./runClient.sh 2 2
+./runClient.sh 3
 
-Result: 1st sell succeeds, 2nd fails
+On Client2, Bob, sell good3 and on Charlie, Client3, check state of good3
 
-*******************************************************
-Wrong user attack demo:
+Demo 3 - Byzantine Server
+./runRMIRegistry.sh
+./runServer.sh Notary1 false
+./runServer.sh Notary2 false false true
+./runServer.sh Notary3 false
+./runServer.sh Notary4 false
 
-Terminal 1: ./runServer.sh
-Terminal 2: ./runAuthClient.sh 1
-Terminal 3: ./runClient.sh 2
-Terminal 4: ./runClient.sh 3
-T2: 1 [Enter]
-T3: 1 [Enter]
-T2: 2 [Enter] good3 [Enter]
-T3: 1 [Enter]
+./runClient.sh 1
+./runClient.sh 2
+./runClient.sh 3
 
-In this test, Alice tries to sell a good from another user,
-passing as parameters the info of the other user
+Every time a read or write operation is executed by the Notary2, it will send a different readId or timestamp
 
-Result: fail
+Demo 4 - Byzantine Client
+./runRMIRegistry.sh
+./runServer.sh Notary1 false
+./runServer.sh Notary2 false
+./runServer.sh Notary3 false
+./runServer.sh Notary4 false
 
-******************************************************
-Man-in-the-middle attack demo:
+./runClient.sh 1
+./runClient.sh 2 4
+./runClient.sh 3
 
-Terminal 1: ./runServer.sh
-Terminal 2: ./runManClient.sh 1
-Terminal 3: ./runClient.sh 2
-Terminal 4: ./runClient.sh 3
-T2: 1 [Enter]
-T2: 2 [Enter] good1 [Enter]
-T3: 2 [Enter] good4 [Enter]
-T4: 3 [Enter] good1 [Enter]
-T2: 1 [Enter]
-T3: 1 [Enter]
-T4: 1 [Enter]
-
-In this test, Alice is selling good1 and Bob is selling good4, 
-when Charlie wants to buy good1, and Alice intercepts the transferGood
-call and changes good1 to good4
-
-Result: fail to buy good1 
-
-******************************************************
-Server failure demo:
-
-Terminal 1: ./runServer.sh
-Terminal 2: ./runClient.sh 1
-Terminal 3: ./runClient.sh 2
-Terminal 4: ./runClient.sh 3
-T2: 1 [Enter]
-T2: 2 [Enter] good2 [Enter]
-T1: [Ctrl-C] ./runServer.sh
-T3: 1 [Enter]
-T2: 4 [Enter] good1 [Enter]
-T3: 4 [Enter] good1 [Enter]
-T3: 3 [Enter] good1 [Enter]
-T2: 1 [Enter]
-T3: 1 [Enter]
+Every time Client2, Bob, makes a write or read request, it will send wrong information to one notary

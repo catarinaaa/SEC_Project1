@@ -1,86 +1,200 @@
 package pt.ulisboa.tecnico.hdsnotary.client;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
-import java.rmi.registry.LocateRegistry;
-import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.KeyStoreException;
-import java.util.HashMap;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
 import java.util.Map;
-
-import pt.ulisboa.tecnico.hdsnotary.library.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
+import pt.ulisboa.tecnico.hdsnotary.library.CryptoUtilities;
+import pt.ulisboa.tecnico.hdsnotary.library.Good;
+import pt.ulisboa.tecnico.hdsnotary.library.InvalidSignatureException;
+import pt.ulisboa.tecnico.hdsnotary.library.NotaryInterface;
+import pt.ulisboa.tecnico.hdsnotary.library.Result;
+import pt.ulisboa.tecnico.hdsnotary.library.StateOfGoodException;
+import pt.ulisboa.tecnico.hdsnotary.library.Transfer;
+import pt.ulisboa.tecnico.hdsnotary.library.TransferException;
+import pt.ulisboa.tecnico.hdsnotary.library.UserInterface;
 
 public class User extends UnicastRemoteObject implements UserInterface {
 
 	private static final long serialVersionUID = 1L;
 
-	private static final String NOTARY_ID = "Notary";
+	private static final long TIMEOUT = 5;
+	private static final int NUM_FAULTS = 1;
+	private static final int NUM_NOTARIES = (3*NUM_FAULTS)+1;
+
 	private static final String NOTARY_CC = "CertCC";
 
 	private final String id;
-	private final String user2;
-	private final String user3;
-	private UserInterface remoteUser2 = null;
-	private UserInterface remoteUser3 = null;
-	// List of all goods possessed
-	private Map<String, Boolean> goods;
-	// Instance of remote Notary Object
-	private NotaryInterface notary = null;
+	private final Boolean verifyCC;
+	private final Boolean verbose = false;
+	private final int demo;
 
+	// List of all goods possessed
+	private ConcurrentHashMap<String, Good> goods;
+
+	// Instance of remote Notary Object
+	private ConcurrentHashMap<String, NotaryInterface> notaryServers;
+	private ConcurrentHashMap<String, UserInterface> remoteUsers = new ConcurrentHashMap<String, UserInterface>();
 
 	private String keysPath; // KeyStore location
 	private String password; // KeyStore password
 
-	CryptoUtilities cryptoUtils;
+	private CryptoUtilities cryptoUtils;
 
-	private Map<String, String> nonceList = new HashMap<>();
+	private ConcurrentHashMap<String, String> nonceList = new ConcurrentHashMap<>();
 
-	public User(String id, NotaryInterface notary, String user2, String user3) throws RemoteException, KeyStoreException {
+	private ExecutorService service = Executors.newFixedThreadPool(4);
+
+	private int readID = 0;
+
+	private ConcurrentHashMap<Result, Integer> answers = new ConcurrentHashMap<>();
+
+	private CountDownLatch awaitSignal = new CountDownLatch(1);
+
+
+	public User(String id, ConcurrentHashMap<String, NotaryInterface> notaryServers,
+		Boolean verifyCC, int demo)
+		throws RemoteException, KeyStoreException, InvalidSignatureException {
 
 		this.id = id;
-		this.notary = notary;
-		this.user2 = user2;
-		this.user3 = user3;
-
-		goods = new HashMap<String, Boolean>();
+		this.notaryServers = notaryServers;
+		this.verifyCC = verifyCC;
+		this.demo = demo;
+		if (demo == 2) {
+			System.out.println("Delaying IntentionToSell");
+		}
+		else if(demo == 4) {
+			System.out.println("Byzantine client");
+		}
 
 		this.keysPath = "Client/storage/" + id + ".p12";
 		this.password = id + "1234";
 
-		goods = new HashMap<String, Boolean>();
-
 		cryptoUtils = new CryptoUtilities(this.id, this.keysPath, this.password);
 
-		System.out.println("Initializing user " + id);
+		//System.out.println("Initializing user " + id);
+
+		if (verbose)
+			System.out.println("Connecting to notary");
+		connectToNotary();
+		if (verbose)
+			System.out.println("Getting my goods from notary");
+		getGoodFromUser();
+		if (verbose)
+			System.out.println("Connecting to users");
+		connectToUsers();
 
 	}
 
-	public String getUser2() {
-		return user2;
+	/*
+	 * Function to look and change certificates with users binded in the RMI registry
+	 */
+	private void connectToUsers() {
+
+		lookUpUsers();
+		try {
+			for (Map.Entry<String, UserInterface> e : remoteUsers.entrySet()) {
+				cryptoUtils.addCertToList(e.getKey(), e.getValue().getCertificate());
+				e.getValue().connectUser(this.id, getCertificate());
+			}
+		} catch (RemoteException e) {
+			e.printStackTrace();
+		}
 	}
 
-	public String getUser3() {
-		return user3;
+	/*
+	 * Function to change certificates with notary
+	 */
+	private void connectToNotary() throws RemoteException, InvalidSignatureException {
+		for (String notaryID : notaryServers.keySet()) {
+			NotaryInterface notary = notaryServers.get(notaryID);
+
+			String cnonce = cryptoUtils.generateCNonce();
+			String toSign = notary.getNonce(this.id) + cnonce + this.id;
+			X509Certificate res = notary
+				.connectToNotary(this.id, cnonce, cryptoUtils.getStoredCert(),
+					cryptoUtils.signMessage(toSign));
+
+			cryptoUtils.addCertToList(notaryID, res);
+		}
+	}
+
+	/*
+	 * Function to obtain goods owned by the user
+	 */
+	public synchronized void getGoodFromUser() throws RemoteException {
+		ConcurrentHashMap<String, Good> map = null;
+
+		for (String notaryID : notaryServers.keySet()) {
+			NotaryInterface notary = notaryServers.get(notaryID);
+
+			//send signed message
+			String cnonce = cryptoUtils.generateCNonce();
+			String toSign = notary.getNonce(this.id) + cnonce + this.id;
+			Result res = null;
+
+			try {
+				res = notary.getGoodsFromUser(this.id, cnonce, cryptoUtils.signMessage(toSign));
+			} catch (InvalidSignatureException e) {
+				System.err.println(e.getMessage());
+			}
+
+			//verify received message
+			String toVerify = toSign + res.getContent().hashCode();
+			if (!cryptoUtils.verifySignature(notaryID, toVerify, res.getSignature())) {
+				System.err.println("ERROR: Signature could not be verified");
+			}
+
+			map = (ConcurrentHashMap<String, Good>) res.getContent();
+
+			//System.out.println("g3.1");
+		}
+
+		if (verbose) {
+			System.out.println("Goods owned:");
+			for (String s : map.keySet()) {
+				System.out.println("> " + s);
+			}
+		}
+		goods = map;
 	}
 
 	public String getId() {
 		return id;
 	}
 
-	public Map<String, Boolean> getGoods() {
+	public Map<String, Good> getGoods() {
 		return goods;
 	}
 
-	public void addGood(String goodId, boolean bool) {
-		goods.put(goodId, bool);
+	@Override
+	public void connectUser(String id, X509Certificate cert) throws RemoteException {
+		cryptoUtils.addCertToList(id, cert);
 	}
 
+	@Override
+	public X509Certificate getCertificate() throws RemoteException {
+		return cryptoUtils.getStoredCert();
+	}
+
+
 	/*
-	 * Function to obtain a nonce for communication
+	 * Function to obtain a nounce for communication
 	 * Invoked before executing any other method
 	 */
 	@Override
@@ -91,96 +205,172 @@ public class User extends UnicastRemoteObject implements UserInterface {
 		return nonce;
 	}
 
+
 	/*
 	 * Invoked when another user is buying a good that this user owns
 	 */
 	@Override
-	public Transfer buyGood(String userId, String goodId, String cnonce, byte[] signature) throws TransferException {
+	public synchronized Result transferGood(String userId, String goodId, String cnonce,
+		byte[] signature) throws TransferException, InvalidSignatureException {
+
+		//verify message received from other user
+		String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
+		if (!cryptoUtils.verifySignature(userId, toVerify, signature)) {
+			throw new InvalidSignatureException(userId);
+		}
+
+		Good goodToSell = goods.get(goodId);
+
+		//writer increment timestamp
+		final int writeTimeStamp = goodToSell.getWriteTimestamp() + 1;
+		if (verbose) {
+			System.out.println("--> WriteTimeStamp sent: " + writeTimeStamp);
+		}
+
+		ConcurrentHashMap<String, Result> acksList = new ConcurrentHashMap<>();
+		ConcurrentHashMap<String, Result> failedAcksList = new ConcurrentHashMap<>();
+
+		CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
+
+		for (String notaryID : notaryServers.keySet()) {
+			service.execute(() -> {
+				try {
+
+					NotaryInterface notary = notaryServers.get(notaryID);
+
+					//anti-spam mechanism
+					String nonceToNotary = cryptoUtils.generateCNonce();
+					MessageDigest md = MessageDigest.getInstance("SHA-256");
+					String hashed = "";
+					String data = "";
+					while (!Pattern.matches("000.*", hashed)) {
+						nonceToNotary = ((new BigInteger(nonceToNotary)).add(BigInteger.ONE))
+							.toString();
+						data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
+						byte[] messageDigest = md.digest(data.getBytes());
+						hashed = cryptoUtils.byteArrayToHex(messageDigest);
+					}
+
+					if (verbose) {
+						System.out.println("--> hash generated: " + nonceToNotary);
+					}
+
+					//send signed message to notary
+					Transfer transfer = notary
+						.transferGood(this.getId(), userId, goodId, writeTimeStamp, nonceToNotary,
+							cryptoUtils.signMessage(data));
+
+					//verify signature with CC
+					String transferVerify =
+						transfer.getId() + transfer.getBuyerId() + transfer.getSellerId() + transfer
+							.getGood().getGoodId();
+					if (verifyCC) {
+						if (!cryptoUtils.verifySignature(NOTARY_CC, transferVerify,
+							transfer.getNotarySignature(),
+							notaryServers.get(notaryID).getCertificateCC())) {
+							throw new InvalidSignatureException(NOTARY_CC);
+						}
+					}
+
+					if (transfer.getGood().getWriteTimestamp() == writeTimeStamp) {
+						String toSign = toVerify + transfer.hashCode();
+						Result resultClient = new Result(transfer, writeTimeStamp,
+							cryptoUtils.signMessage(toSign));
+
+						acksList.put(notaryID, resultClient);
+						awaitSignal.countDown();
+					} else {
+						throw new TransferException("ERROR: Timestamp does not match");
+					}
+
+					if (verbose) {
+						System.out.println("--> CC Signature verified! Notary confirmed buy good");
+					}
+				} catch (IOException e) {
+					rebind();
+				} catch (InvalidSignatureException | TransferException e) {
+					System.err.println(e.getMessage());
+					failedAcksList.put(notaryID,
+						new Result(new Boolean(false), cryptoUtils.signMessage("false")));
+					awaitSignal.countDown();
+				} catch (NoSuchAlgorithmException e) {
+					failedAcksList.put(notaryID,
+						new Result(new Boolean(false), cryptoUtils.signMessage("false")));
+					awaitSignal.countDown();
+				}
+			});
+		}
 
 		try {
+			awaitSignal.await(TIMEOUT, TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+			throw new TransferException("ERROR: quorum waiting failed");
+		}
 
-			String toVerify = nonceList.get(userId) + cnonce + userId + goodId;
-
-			if (!cryptoUtils.verifySignature(userId, toVerify, signature))
-				throw new TransferException("Error");
-
-
-			String nonceToNotary = cryptoUtils.generateCNonce();
-			String data = notary.getNonce(this.id) + nonceToNotary + this.id + userId + goodId;
-
-			Transfer result = notary.transferGood(this.getId(), userId, goodId, nonceToNotary, cryptoUtils.signMessage(data));
-
-			String transferVerify = result.getId() + result.getBuyerId() + result.getSellerId() + result.getGoodId();
-			System.out.println("Verify: " + transferVerify);
-
-			if (cryptoUtils.verifySignature(NOTARY_CC, transferVerify, result.getNotarySignature(), notary.getCertificate())) {
-				System.out.println("CC Signature verified! Notary confirmed buy good");
+		//checks if enough notaries respond
+		if (acksList.size() + failedAcksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+			System.out.println("--> Quorum reached");
+			if (verbose) {
+				System.out.println("--> Removing good " + goodId + " from my list");
+			}
+			if (acksList.size() > failedAcksList.size()) {
 				goods.remove(goodId);
-				return result;
+				return (Result) acksList.values().toArray()[0];
+			} else {
+				throw new TransferException("ERROR: transfer not possible");
 			}
-			else {
-				System.err.println("ERROR: CC Signature does not verify");
-				throw new TransferException("Error");
-			}
-		} catch (IOException e) {
-			rebind();
-			return buyGood(userId, goodId, cnonce, signature);
+		} else {
+			System.out.println("--> Quorum not reached...    :(");
+			throw new TransferException("ERROR: quorum not reached");
 		}
 	}
 
+
 	/*
-	 * Invoked when interacting with the users
+	 * Invoked when a user wants to buy a good
 	 */
-	public boolean buying(String goodId) {
+	public synchronized void buying(String goodId) {
 		try {
+			if (goods.containsKey(goodId)) {
+				throw new TransferException("ERROR: good already owned");
+			}
+
 			Result stateOfGood = stateOfGood(goodId);
-			if (stateOfGood == null || false == stateOfGood.getResult()) {
-				System.out.println("ERROR: Buying was not possible!");
-				System.out.println("------------------");
-				return false;
+			if (stateOfGood == null || false == (Boolean) stateOfGood.getContent()) {
+				throw new TransferException("ERROR: stateOfGood failed");
 			}
-			else {
-				String seller = stateOfGood.getUserId();
+			String seller = stateOfGood.getUserId();
 
-				if(remoteUser2 == null || remoteUser3 == null) {
-					lookUpUsers();
-				}
-
-				Transfer result;
-
-				if(seller.equals(user2) && remoteUser2 != null) {
-
-					String nonce = remoteUser2.getNonce(this.id, cryptoUtils.signMessage(this.id));
-					String cnonce = cryptoUtils.generateCNonce();
-					nonceList.put(user2, cnonce);
-					String toSign = nonce + cnonce + this.id + goodId;
-					result = remoteUser2.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
-				}
-				else if(seller.equals(user3) && remoteUser3 != null) {
-					String nonce = remoteUser3.getNonce(this.id, cryptoUtils.signMessage(this.id));
-					String cnonce = cryptoUtils.generateCNonce();
-					nonceList.put(user3, cnonce);
-					String toSign = nonce + cnonce + this.id + goodId;
-					result = remoteUser3.buyGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
-				}
-
-
-				goods.put(goodId, false);
-				System.out.println("SUCCESSFUL BUY");
-				System.out.println(goodId + " was added to the list of goods!");
-				System.out.println("------------------");
-				return true;
-
-
+			//reconnect to users if one is missing
+			if (!remoteUsers.containsKey(seller)) {
+				connectToUsers();
 			}
 
+			//send signed message
+			Result result;
+			String nonce = remoteUsers.get(seller)
+				.getNonce(this.id, cryptoUtils.signMessage(this.id));
+			String cnonce = cryptoUtils.generateCNonce();
+			nonceList.put(seller, cnonce);
+			String toSign = nonce + cnonce + this.id + goodId;
+			result = remoteUsers.get(seller)
+				.transferGood(this.id, goodId, cnonce, cryptoUtils.signMessage(toSign));
+
+
+			goods.put(goodId, ((Transfer) result.getContent()).getGood());
+			if (verbose) {
+				System.out.println("-->" + goodId + " was added to the list of goods!");
+				System.out.println("Result: TRUE\n------------------");
+			}
 		} catch (IOException e) {
 			rebind();
-			return buying(goodId);
-		}
-		catch (TransferException e) {
-			System.out.println("Buying not possible!");
-			return false;
+			buying(goodId);
+		} catch (TransferException e) {
+			System.err.println(e.getMessage());
+			System.out.println("Result: FALSE\n------------------");
+		} catch (InvalidSignatureException e) {
+			System.out.println("Result: INVALID SIGNATURE EXCEPTION\n------------------");
 		}
 	}
 
@@ -188,32 +378,133 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	 * Invoked when a user wants to sell a good
 	 */
 
-	public boolean intentionSell(String goodId) {
-		try {
-			String nonce = notary.getNonce(this.id);
-			String cnonce = cryptoUtils.generateCNonce();
-			String data = nonce + cnonce + this.id + goodId;
-			Result result = notary.intentionToSell(this.id, goodId, cnonce, cryptoUtils.signMessage(data));
+	public synchronized void intentionSell(String goodId) {
+		Good goodToSell = goods.get(goodId);
+		if (goodToSell == null) {
+			System.err.println("ERROR: Good not found!");
+			System.out.println("Result: FALSE\n------------------");
+			return;
+		}
 
-			if (result != null && cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
-				if(result.getResult()) {
-					goods.replace(goodId, true);
-					System.out.println("Result: " + goodId + " is now for sale");
+		//writer increments timestamp
+		final int writeTimeStamp = goodToSell.getWriteTimestamp() + 1;
+
+		if (verbose) {
+			System.out.println("WriteTimeStamp: " + writeTimeStamp);
+		}
+
+		ConcurrentHashMap<String, Result> acksList = new ConcurrentHashMap<>();
+		ConcurrentHashMap<String, Result> failedAcksList = new ConcurrentHashMap<>();
+
+		CountDownLatch awaitSignal = new CountDownLatch((NUM_NOTARIES + NUM_FAULTS) / 2 + 1);
+
+		int test = 0;
+		AtomicInteger demo4 = new AtomicInteger(0);
+
+		// if demo is Read while Write, delay two writes
+		// if demo is Byzantine Client, send one wrong value to notaries each IntentionToSell
+		for (String notaryID : notaryServers.keySet()) {
+			NotaryInterface notary = notaryServers.get(notaryID);
+			if (demo == 2) {
+				test++;
+				try {
+
+					if (test == 1) {
+						System.out.println("Sleeping");
+						Thread.sleep(2000);
+					} else if (test == 3) {
+						System.out.println("Sleeping");
+						Thread.sleep(3000);
+					}
+
+				} catch (InterruptedException e) {
+					e.printStackTrace();
 				}
-				else {
-					System.out.println("Result: Invalid good");
+			}
+
+			service.execute(() -> {
+
+				try {
+					//send signed message
+					boolean modify = false;
+					if(demo == 4) {
+						modify = demo4.incrementAndGet() == 2;
+						System.out.println("Sending wrong timeStamp");
+					}
+
+					String nonce = notary.getNonce(this.id);
+					String cnonce = cryptoUtils.generateCNonce();
+					String data = nonce + cnonce + this.id + goodId + writeTimeStamp;
+					Result result = notary.intentionToSell(this.id, goodId, modify ? 1000 : writeTimeStamp, cnonce,
+						cryptoUtils.signMessage(data));
+
+					//verify signature of receive message
+					if (!cryptoUtils
+						.verifySignature(notaryID, data + result.getContent().hashCode(),
+							result.getSignature())) {
+						throw new InvalidSignatureException(notaryID);
+					}
+					if (verbose) {
+						System.out
+							.println("Received WriteTimeStamp: " + result.getWriteTimestamp());
+					}
+
+					//check if timestamp matches
+					if ((Boolean) result.getContent()
+						&& result.getWriteTimestamp() == writeTimeStamp) {
+						acksList.put(notaryID, result);
+						awaitSignal.countDown();
+						if (verbose) {
+							System.out.println(
+								"NotaryID: " + notaryID + "\nResult: " + (Boolean) result
+									.getContent());
+						}
+
+					} else {
+						failedAcksList.put(notaryID,
+							new Result(new Boolean(false), cryptoUtils.signMessage("false")));
+						awaitSignal.countDown();
+						System.out.println("Result: Invalid good");
+					}
+
+				} catch (RemoteException e) {
+					rebind();
+				} catch (InvalidSignatureException e) {
+					failedAcksList.put(notaryID,
+						new Result(new Boolean(false), cryptoUtils.signMessage("false")));
+					awaitSignal.countDown();
 				}
-				System.out.println("-----------------------------");
-				return result.getResult();
+			});
+
+		}
+
+		//waits for notaries replies
+		try {
+			awaitSignal.await(TIMEOUT, TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			System.out.println("Result: FALSE\n------------------");
+			return;
+		}
+
+		// checks if quorum was reached
+		if (acksList.size() + failedAcksList.size() > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+			if (verbose) {
+				System.out.println("--> AcksList: " + acksList.size());
 			}
-			else {
-				System.err.println("ERROR: Signature does not verify");
-				System.out.println("-----------------------------");
-				return false;
+			System.out.println("--> Quorum Reached");
+
+			if (acksList.size() > failedAcksList.size()) {
+				goods.get(goodId).setForSale();
+				goodToSell.setWriteTimestamp(writeTimeStamp);
+				System.out.println("Result: TRUE\n------------------");
+			} else {
+				System.out.println("Result: FALSE\n------------------");
 			}
-		} catch (RemoteException e) {
-			rebind();
-			return intentionSell(goodId);
+
+		} else {
+			System.out.println("--> Quorum not reached...");
+			System.out.println("Result: FALSE\n------------------");
+
 		}
 	}
 
@@ -221,50 +512,162 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	 * Invoked to get current state of a good, it returns the current owner and if it is for sale or not
 	 */
 	public Result stateOfGood(String goodId) {
+
+		answers.clear();
+
+		awaitSignal = new CountDownLatch(1);
+
+		readID++;
+
+		AtomicInteger exceptions = new AtomicInteger(0);
+		for (String notaryID : notaryServers.keySet()) {
+			NotaryInterface notary = notaryServers.get(notaryID);
+
+			service.execute(() -> {
+				Result result = null;
+
+				try {
+					//send signed message
+					String cnonce = cryptoUtils.generateCNonce();
+					String data = notary.getNonce(this.id) + cnonce + this.id + goodId + readID;
+
+					result = notary
+						.stateOfGood(this.getId(), readID, cnonce, goodId,
+							cryptoUtils.signMessage(data));
+
+					System.out.println("ReadID: " + readID + " : " + result.getReadID());
+
+					//verify received message
+					if (!cryptoUtils
+						.verifySignature(notaryID, data + result.getContent().hashCode(),
+							result.getSignature()) && result.getReadID() == readID) {
+						throw new InvalidSignatureException(notaryID);
+					}
+
+					answers.compute(result, (key, value) -> {
+						if (value == null) {
+							return 1;
+						} else {
+							return value + 1;
+						}
+					});
+
+
+					if (verbose) {
+						System.out.println("Owner: " + result.getUserId());
+						System.out.println("For sale: " + result.getContent());
+						System.out.println("-------------------------");
+					}
+
+					if (answers.get(result) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+						//System.out.println("Sending signal " + answers.get(result));
+						awaitSignal.countDown();
+					}
+
+				} catch (RemoteException e) {
+					rebind();
+				} catch (StateOfGoodException | InvalidSignatureException e) {
+					System.out.println(notaryID + ": " + e.getMessage());
+					if (exceptions.incrementAndGet() == 4) {
+						awaitSignal.countDown();
+					}
+				}
+
+
+			});
+		}
+
 		try {
-
-			String cnonce = cryptoUtils.generateCNonce();
-			String data = notary.getNonce(this.id) + cnonce + this.id + goodId;
-
-			Result result = notary.stateOfGood(this.getId(), cnonce, goodId, cryptoUtils.signMessage(data));
-
-			if (cryptoUtils.verifySignature(NOTARY_ID, data + result.getResult(), result.getSignature())) {
-				System.out.println("Owner: " + result.getUserId());
-				System.out.println("For sale: " + result.getResult());
-				System.out.println("-------------------------");
-				return result;
-			}
-			else {
-				System.err.println("ERROR: Signature does not verify");
-				System.out.println("-------------------------");
+			if (awaitSignal.await(TIMEOUT, TimeUnit.SECONDS) == false) {
 				return null;
 			}
-		} catch(RemoteException e) {
-			rebind();
-			return stateOfGood(goodId);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+			return null;
+		}
+
+		Result result = null;
+		
+		for (Result resultAux : answers.keySet()) {
+			if (answers.get(resultAux) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+				result = resultAux;
+			}
+		}
+
+		if (result == null) {
+			System.err.println("ERROR -> Result is null");
+		} else {
+			if (answers.keySet().size() == 1 && answers.get(result) == 4)
+				System.out.println("All answers match. Quorum Reached!");
+			else {
+				System.out.println("Quorum Reached (one notary failed)");
+				System.out.println("Result: " + result);
+			}
+			System.out
+				.println("Owner: " + result.getUserId() + " For Sale: " + result.getContent());
+		}
+
+		for (String notaryID : notaryServers.keySet()) {
+
+			try {
+				NotaryInterface notary = notaryServers.get(notaryID);
+				String cnonce = cryptoUtils.generateCNonce();
+				String data = notary.getNonce(this.id) + cnonce + this.id + readID;
+
+				notary.confirmRead(this.id, goodId, this.readID, cnonce,
+					cryptoUtils.signMessage(data));
+			} catch (RemoteException e) {
+				rebind();
+				System.err.println("ERROR: Could not confirm read");
+			}
+
+		}
+
+		return result;
+	}
+
+	@Override
+	public void updateValue(String notaryId, Result result, String nonce, byte[] signature)
+		throws RemoteException {
+
+		String toVerify = nonceList.get(notaryId) + nonce + notaryId + result.hashCode();
+		System.out.println(result);
+		if (cryptoUtils.verifySignature(notaryId, toVerify, signature)) {
+
+			answers.compute(result, (key, value) -> {
+				if (value == null) {
+					return 1;
+				} else {
+					return value + 1;
+				}
+			});
+
+			for (Result resultAux : answers.keySet()) {
+				if (answers.get(resultAux) > (NUM_NOTARIES + NUM_FAULTS) / 2) {
+					awaitSignal.countDown();
+				}
+			}
 		}
 	}
 
 	/*
 	 * Invoked when the server crashes and communications between the user and the notary fail
 	 */
-	public void rebind() {
-		try {
-        	Registry reg = LocateRegistry.getRegistry(3000);
-			this.notary = (NotaryInterface) Naming.lookup("//localhost:3000/Notary");
-            reg.rebind(getId(), this);
-		} catch (MalformedURLException | RemoteException | NotBoundException e) {
-			e.printStackTrace();
-		}
+	private void rebind() {
+		notaryServers = Client.locateNotaries();
+		connectToUsers();
+		//lookUpUsers();
+
 	}
+
 
 	/*
 	 * List all current goods
 	 */
 	public void listGoods() {
-		for (String goodId: goods.keySet()){
-			Boolean value = goods.get(goodId);
-            System.out.println(goodId + " --> For sale: " + value);
+		for (String goodId : goods.keySet()) {
+			Boolean value = goods.get(goodId).forSale();
+			System.out.println(goodId + " --> For sale: " + value);
 		}
 	}
 
@@ -272,13 +675,18 @@ public class User extends UnicastRemoteObject implements UserInterface {
 	 * Finds the remaining users on the RMI registry
 	 */
 	private void lookUpUsers() {
-		System.out.println(getUser2());
-		System.out.println(getUser3());
 		try {
-			remoteUser2 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser2());
-			remoteUser3 = (UserInterface) Naming.lookup("//localhost:3000/" + getUser3());
+			String[] regList = Naming.list("//localhost:3000");
+			for (String s : regList) {
+				if (!s.contains("Notary") && !s.contains(this.id)) {
+					remoteUsers
+						.put(s.replace("//localhost:3000/", ""), (UserInterface) Naming.lookup(s));
+				}
+			}
 		} catch (MalformedURLException | RemoteException | NotBoundException e) {
 			System.err.println("ERROR looking up user");
 		}
 	}
+
+
 }

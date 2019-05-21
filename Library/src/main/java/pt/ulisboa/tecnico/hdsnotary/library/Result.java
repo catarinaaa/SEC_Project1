@@ -2,62 +2,101 @@ package pt.ulisboa.tecnico.hdsnotary.library;
 
 
 import java.io.Serializable;
+import java.util.Objects;
 
 public class Result implements Serializable {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 1L;
-	
-	private String userId;
-	private Boolean result;
-	private Transfer transfer;
-	private String cnonce;
-	private byte[] signature;
-	
-	public Result(Boolean result, String cnonce, byte[] signature) {
-		super();
-		this.userId = null;
-		this.result = result;
-		this.cnonce = cnonce;
-		this.signature = signature;
-		this.transfer = null;
-	}
-	
-	public Result(Boolean result, Transfer transfer, String cnonce, byte[] signature) {
-		super();
-		this.userId = null;
-		this.result = result;
-		this.cnonce = cnonce;
-		this.signature = signature;
-		this.transfer = transfer;
-	}
 
-	public Result(String userId, Boolean result, String cnonce, byte[] signature) {
-		super();
-		this.userId = userId;
-		this.result = result;
-		this.cnonce = cnonce;
-		this.signature = signature;
-	}
-	
-	public Boolean getResult() {
-		return result;
-	}
-	
-	public byte[] getSignature() {
-		return signature;
-	}
-	
-	public String getUserId() {
-		return userId;
-	}
+    /**
+     *
+     */
+    private static final long serialVersionUID = 1L;
 
-	public Transfer getTransfer() {
-		return transfer;
-	}
+    private final Object content;
+    private final String userId;
+    private final byte[] signature;
+    private final int writeTimestamp;
+    private final int readID;
 
-	public String getCnonce() {
-		return cnonce;
+    // StateOfGood
+    public Result(String userId, Object content, int writeTimestamp, int readID, byte[] signature) {
+        super();
+        this.userId = userId;
+        this.content = content;
+        this.signature = signature;
+        this.writeTimestamp = writeTimestamp;
+        this.readID = readID;
+    }
+
+    public Result(String userId, Object content, int writeTimestamp, byte[] signature) {
+        super();
+        this.userId = userId;
+        this.content = content;
+        this.signature = signature;
+        this.writeTimestamp = writeTimestamp;
+        this.readID = -1;
+    }
+
+    public Result(Object content, int writeTimestamp, byte[] signature) {
+        super();
+        this.userId = null;
+        this.content = content;
+        this.signature = signature;
+        this.writeTimestamp = writeTimestamp;
+        this.readID = -1;
+    }
+
+    public Result(Object content, byte[] signature) {
+        super();
+        this.userId = null;
+        this.content = content;
+        this.signature = signature;
+        this.writeTimestamp = -1;
+        this.readID = -1;
+    }
+
+    public Object getContent() {
+        return content;
+    }
+
+    public byte[] getSignature() {
+        return signature;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public int getWriteTimestamp() {
+        return writeTimestamp;
+    }
+
+    public int getReadID() {
+        return readID;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        Result r = (Result) o;
+//		System.out.println(userId + " " +content + " " +r.getUserId() + " " +r.getContent());
+        if (userId == null || content == null || r.getUserId() == null || r.getContent() == null) {
+            return false;
+        }
+        return (userId.equals(r.getUserId()) && content.equals(r.getContent())
+                && writeTimestamp == r.writeTimestamp && readID == r.getReadID());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.userId, this.content, this.writeTimestamp, this.readID);
+    }
+
+	@Override
+	public String toString() {
+		return "Result{" +
+			"content=" + content +
+			", userId='" + userId + '\'' +
+			", writeTimestamp=" + writeTimestamp +
+			", readID=" + readID +
+			'}';
 	}
 }
